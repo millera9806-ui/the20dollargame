@@ -1,3 +1,4 @@
+// server.js — stable Render version
 import express from "express";
 import bodyParser from "body-parser";
 import sqlite3 from "sqlite3";
@@ -10,7 +11,6 @@ import cors from "cors";
 import fetch from "node-fetch";
 
 const { open } = pkg;
-
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: resolve(__dirname, ".env") });
 
@@ -18,12 +18,13 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, "public");
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "claims.db");
 
+// ----------  STATE ----------
 let db;
 let openWindow = false;
 let winnerSelected = false;
 let windowExpiresAt = 0;
 
-// --- DB INIT ---
+// ----------  INIT DB THEN START ----------
 async function initDB() {
   const database = await open({ filename: DB_PATH, driver: sqlite3.Database });
   await database.exec(`
@@ -42,7 +43,6 @@ async function initDB() {
   return database;
 }
 
-// --- CAPTCHA VERIFY ---
 async function verifyCaptcha(token) {
   const secret = process.env.RECAPTCHA_SECRET;
   const resp = await fetch("https://www.google.com/recaptcha/api/siteverify", {
@@ -53,7 +53,14 @@ async function verifyCaptcha(token) {
   return resp.json();
 }
 
-// --- START SERVER AFTER DB READY ---
+function requireAdmin(req, res, next) {
+  const key = req.query.admin || req.headers["x-admin-key"];
+  if (!process.env.ADMIN_PASSWORD) return res.status(500).send("ADMIN_PASSWORD not set");
+  if (key === process.env.ADMIN_PASSWORD) return next();
+  return res.status(401).send("unauthorized");
+}
+
+// ----------  START SERVER ----------
 initDB()
   .then((database) => {
     db = database;
@@ -75,13 +82,7 @@ initDB()
       next();
     });
 
-    function requireAdmin(req, res, next) {
-      const key = req.query.admin || req.headers["x-admin-key"];
-      if (!process.env.ADMIN_PASSWORD) return res.status(500).send("ADMIN_PASSWORD not set");
-      if (key === process.env.ADMIN_PASSWORD) return next();
-      return res.status(401).send("unauthorized");
-    }
-
+    // ---------- ROUTES ----------
     app.get("/state", (req, res) => {
       const remaining = Math.max(0, Math.floor((windowExpiresAt - Date.now()) / 1000));
       res.json({ openWindow, remaining });
@@ -139,7 +140,7 @@ initDB()
       res.json({ ok: true, opened_for: seconds });
     });
 
-    // cron job for daily window
+    // ---------- CRON ----------
     cron.schedule(process.env.CRON_SCHEDULE || "0 18 * * *", () => {
       const seconds = parseInt(process.env.WINDOW_SECONDS || "60", 10);
       openWindow = true;
