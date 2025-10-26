@@ -1,4 +1,4 @@
-// server.js — final Render-ready version (DB-safe, Captcha verified)
+// server.js — final Render-ready version (no syntax errors, DB-safe, Captcha verified)
 import express from "express";
 import bodyParser from "body-parser";
 import sqlite3 from "sqlite3";
@@ -25,7 +25,7 @@ app.use(express.static(PUBLIC));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// enforce HTTPS + canonical www
+// --- HTTPS redirect + canonical www ---
 app.set("trust proxy", true);
 app.use((req, res, next) => {
   if (req.headers["x-forwarded-proto"] && req.headers["x-forwarded-proto"] !== "https") {
@@ -37,7 +37,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ---------- DATABASE SETUP ----------
+// --- DATABASE ---
 let db;
 let dbReady = false;
 
@@ -62,14 +62,15 @@ async function initDB() {
     console.error("DB init error:", err);
   }
 }
+
 await initDB();
 
-// ---------- STATE ----------
+// --- STATE ---
 let openWindow = false;
 let winnerSelected = false;
 let windowExpiresAt = 0;
 
-// ---------- HELPERS ----------
+// --- HELPERS ---
 function requireAdmin(req, res, next) {
   const key = req.query.admin || req.headers["x-admin-key"];
   if (!process.env.ADMIN_PASSWORD) return res.status(500).send("ADMIN_PASSWORD not set");
@@ -87,6 +88,80 @@ async function verifyCaptcha(token) {
   return resp.json();
 }
 
-// ---------- ROUTES ----------
+// --- ROUTES ---
 app.get("/state", (req, res) => {
-  const remaining = Math.max(0, Math.floor((windowExpiresAt - Date.now
+  const remaining = Math.max(0, Math.floor((windowExpiresAt - Date.now()) / 1000));
+  res.json({ openWindow, remaining });
+});
+
+app.post("/claim", async (req, res) => {
+  try {
+    if (!dbReady) return res.status(503).json({ ok: false, msg: "Database not ready. Try again." });
+    if (!openWindow) return res.status(400).json({ ok: false, msg: "Window closed" });
+
+    const { name, payout_method, payout_id, captcha } = req.body;
+    if (!name || !payout_method || !payout_id)
+      return res.status(400).json({ ok: false, msg: "Missing fields" });
+
+    const capRes = await verifyCaptcha(captcha);
+    if (!capRes.success)
+      return res.status(400).json({ ok: false, msg: "Captcha failed" });
+
+    const now = Date.now();
+    const r = await db.run(
+      `INSERT INTO claims (name, payout_method, payout_id, created_at)
+       VALUES (?,?,?,?)`,
+      [name.trim(), payout_method.trim(), payout_id.trim(), now]
+    );
+    const claimId = r.lastID;
+
+    if (!winnerSelected) {
+      winnerSelected = true;
+      await db.run(`UPDATE claims SET is_winner=1 WHERE id=?`, claimId);
+      console.log(`🎉 Winner: claim ${claimId}`);
+      return res.json({ ok: true, winner: true });
+    }
+
+    return res.json({ ok: true, winner: false });
+  } catch (err) {
+    console.error("Claim error:", err);
+    res.status(500).json({ ok: false, msg: "Server error" });
+  }
+});
+
+app.get("/admin/claims", requireAdmin, async (req, res) => {
+  if (!dbReady) return res.status(503).json({ ok: false, msg: "DB not ready" });
+  const rows = await db.all(`SELECT * FROM claims ORDER BY created_at DESC LIMIT 500`);
+  res.json(rows);
+});
+
+app.post("/admin/open", requireAdmin, (req, res) => {
+  const seconds = parseInt(req.query.seconds || "60", 10);
+  openWindow = true;
+  winnerSelected = false;
+  windowExpiresAt = Date.now() + seconds * 1000;
+  console.log(`🟢 Window open for ${seconds}s`);
+  setTimeout(() => {
+    openWindow = false;
+    console.log("🔴 Window closed");
+  }, seconds * 1000);
+  res.json({ ok: true, opened_for: seconds });
+});
+
+// --- CRON ---
+cron.schedule(process.env.CRON_SCHEDULE || "0 18 * * *", () => {
+  const seconds = parseInt(process.env.WINDOW_SECONDS || "60", 10);
+  openWindow = true;
+  winnerSelected = false;
+  windowExpiresAt = Date.now() + seconds * 1000;
+  console.log(`🕕 Auto-opened window for ${seconds}s`);
+  setTimeout(() => (openWindow = false), seconds * 1000);
+});
+
+// --- HEALTH CHECK ---
+app.get("/health", (req, res) => {
+  res.json({ ok: true, dbReady, openWindow });
+});
+
+// --- START SERVER ---
+app.listen(PORT, () => console.log(`🚀 Live on port ${PORT}`));
