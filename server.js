@@ -1,4 +1,4 @@
-// server.js — with Google reCAPTCHA verification
+// server.js — full production-ready version
 import express from "express";
 import bodyParser from "body-parser";
 import sqlite3 from "sqlite3";
@@ -7,65 +7,80 @@ import cron from "node-cron";
 import path, { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import cors from "cors";
 import fetch from "node-fetch";
 
-// --- ensure .env loads even on Node 22+ ---
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: resolve(__dirname, ".env") });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, "public");
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, "claims.db");
 
+app.use(cors());
 app.use(express.static(PUBLIC));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// ---------- Database ----------
+// Enforce HTTPS and canonical www
+app.set("trust proxy", true);
+app.use((req, res, next) => {
+  if (req.headers["x-forwarded-proto"] && req.headers["x-forwarded-proto"] !== "https") {
+    return res.redirect(301, `https://${req.headers.host}${req.url}`);
+  }
+  if (req.hostname === "the20dollargame.com") {
+    return res.redirect(301, `https://www.the20dollargame.com${req.url}`);
+  }
+  next();
+});
+
+// Database
 let db;
 (async () => {
-  db = await open({ filename: "./claims.db", driver: sqlite3.Database });
-  await db.exec(`CREATE TABLE IF NOT EXISTS claims (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT,
-    payout_method TEXT,
-    payout_id TEXT,
-    created_at INTEGER,
-    is_winner INTEGER DEFAULT 0,
-    paid INTEGER DEFAULT 0,
-    admin_note TEXT
-  );`);
+  db = await open({ filename: DB_PATH, driver: sqlite3.Database });
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS claims (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT,
+      payout_method TEXT,
+      payout_id TEXT,
+      created_at INTEGER,
+      is_winner INTEGER DEFAULT 0,
+      paid INTEGER DEFAULT 0,
+      admin_note TEXT
+    );
+  `);
   console.log("✅ Database ready");
-})();
+})().catch(console.error);
 
-// ---------- State ----------
+// State
 let openWindow = false;
 let winnerSelected = false;
 let windowExpiresAt = 0;
 
-// ---------- Helpers ----------
+// Helpers
 function requireAdmin(req, res, next) {
   const key = req.query.admin || req.headers["x-admin-key"];
-  if (!process.env.ADMIN_PASSWORD)
-    return res.status(500).send("ADMIN_PASSWORD not set");
+  if (!process.env.ADMIN_PASSWORD) return res.status(500).send("ADMIN_PASSWORD not set");
   if (key === process.env.ADMIN_PASSWORD) return next();
   return res.status(401).send("unauthorized");
 }
 
 async function verifyCaptcha(token) {
   const secret = process.env.RECAPTCHA_SECRET;
-  const res = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+  const resp = await fetch("https://www.google.com/recaptcha/api/siteverify", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `secret=${secret}&response=${token}`
+    body: `secret=${encodeURIComponent(secret)}&response=${encodeURIComponent(token)}`
   });
-  return await res.json();
+  return resp.json();
 }
 
-// ---------- Routes ----------
+// Routes
 app.get("/state", (req, res) => {
   const remaining = Math.max(0, Math.floor((windowExpiresAt - Date.now()) / 1000));
-  res.json({ openWindow, winnerSelected, remaining });
+  res.json({ openWindow, remaining });
 });
 
 app.post("/claim", async (req, res) => {
@@ -73,14 +88,10 @@ app.post("/claim", async (req, res) => {
     if (!openWindow) return res.status(400).json({ ok: false, msg: "Window closed" });
 
     const { name, payout_method, payout_id, captcha } = req.body;
-    if (!name || !payout_method || !payout_id)
-      return res.status(400).json({ ok: false, msg: "Missing fields" });
-    if (!captcha)
-      return res.status(400).json({ ok: false, msg: "Captcha missing" });
+    if (!name || !payout_method || !payout_id) return res.status(400).json({ ok: false, msg: "Missing fields" });
 
     const capRes = await verifyCaptcha(captcha);
-    if (!capRes.success)
-      return res.status(400).json({ ok: false, msg: "Captcha failed" });
+    if (!capRes.success) return res.status(400).json({ ok: false, msg: "Captcha failed" });
 
     const now = Date.now();
     const r = await db.run(
@@ -92,66 +103,43 @@ app.post("/claim", async (req, res) => {
     if (!winnerSelected) {
       winnerSelected = true;
       await db.run(`UPDATE claims SET is_winner=1 WHERE id=?`, claimId);
-      console.log(`✅ Winner selected: claim ${claimId}`);
-      return res.json({ ok: true, winner: true, claimId });
+      console.log(`🎉 Winner: claim ${claimId}`);
+      return res.json({ ok: true, winner: true });
     }
 
-    return res.json({ ok: true, winner: false, claimId });
+    return res.json({ ok: true, winner: false });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ ok: false, msg: "Server error" });
+    res.status(500).json({ ok: false, msg: "Server error" });
   }
 });
 
-// ---------- Admin ----------
 app.get("/admin/claims", requireAdmin, async (req, res) => {
   const rows = await db.all(`SELECT * FROM claims ORDER BY created_at DESC LIMIT 500`);
   res.json(rows);
 });
 
-app.post("/admin/mark-paid", requireAdmin, async (req, res) => {
-  const { id, admin_note } = req.body;
-  if (!id) return res.status(400).json({ ok: false, msg: "missing id" });
-  await db.run(`UPDATE claims SET paid=1, admin_note=? WHERE id=?`, [admin_note || "", id]);
-  res.json({ ok: true });
-});
-
-app.post("/admin/open", requireAdmin, async (req, res) => {
+app.post("/admin/open", requireAdmin, (req, res) => {
   const seconds = parseInt(req.query.seconds || "60");
   openWindow = true;
   winnerSelected = false;
   windowExpiresAt = Date.now() + seconds * 1000;
-
-  console.log(`🟢 Window opened for ${seconds}s by admin`);
+  console.log(`🟢 Window open for ${seconds}s`);
   setTimeout(() => {
     openWindow = false;
-    console.log("🔴 Window closed automatically.");
+    console.log("🔴 Window closed");
   }, seconds * 1000);
-
   res.json({ ok: true, opened_for: seconds });
 });
 
-// ---------- Scheduled open (optional) ----------
-const cronSchedule = process.env.CRON_SCHEDULE || "0 18 * * *";
-cron.schedule(cronSchedule, () => {
+// Schedule daily open
+cron.schedule(process.env.CRON_SCHEDULE || "0 18 * * *", () => {
   const seconds = parseInt(process.env.WINDOW_SECONDS || "60");
   openWindow = true;
   winnerSelected = false;
   windowExpiresAt = Date.now() + seconds * 1000;
-  console.log(`🕕 Scheduled window opened for ${seconds}s.`);
-  setTimeout(() => {
-    openWindow = false;
-    console.log("🔴 Scheduled window closed.");
-  }, seconds * 1000);
+  console.log(`🕕 Auto-opened window for ${seconds}s`);
+  setTimeout(() => (openWindow = false), seconds * 1000);
 });
 
-// ---------- Start ----------
-app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
-  console.log(
-    `ADMIN_PASSWORD: ${process.env.ADMIN_PASSWORD ? "✅ loaded" : "❌ missing"}`
-  );
-  console.log(
-    `RECAPTCHA_SECRET: ${process.env.RECAPTCHA_SECRET ? "✅ loaded" : "❌ missing"}`
-  );
-});
+app.listen(PORT, () => console.log(`🚀 Live on port ${PORT}`));
