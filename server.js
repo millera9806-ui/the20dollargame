@@ -1,4 +1,4 @@
-// server.js — Render-ready final build (persistent DB, captcha, admin)
+// server.js — Render fail-safe version (auto DB path, captcha, admin)
 import express from "express";
 import bodyParser from "body-parser";
 import sqlite3 from "sqlite3";
@@ -9,16 +9,25 @@ import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import cors from "cors";
 import fetch from "node-fetch";
+import fs from "fs";
 
+// ----------  SETUP ----------
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: resolve(__dirname, ".env") });
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, "public");
 
-// ✅ Always use /data on Render (writable disk)
-const DB_PATH = process.env.DB_PATH || "/data/claims.db";
+// ✅ fail-safe DB path logic (works with or without Render disk)
+let DB_PATH = "/data/claims.db"; // preferred persistent disk
+if (!fs.existsSync("/data")) {
+  DB_PATH = path.join("/tmp", "claims.db"); // fallback if disk missing
+}
+const dir = path.dirname(DB_PATH);
+if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+console.log("📁 Using database path:", DB_PATH);
 
+// ----------  GLOBAL STATE ----------
 let db;
 let openWindow = false;
 let winnerSelected = false;
