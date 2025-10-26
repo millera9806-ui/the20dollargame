@@ -1,8 +1,8 @@
-// server.js — stable Render version
+// server.js — Render-stable final version
 import express from "express";
 import bodyParser from "body-parser";
 import sqlite3 from "sqlite3";
-import pkg from "sqlite";
+import * as sqlite from "sqlite";
 import cron from "node-cron";
 import path, { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -10,7 +10,6 @@ import dotenv from "dotenv";
 import cors from "cors";
 import fetch from "node-fetch";
 
-const { open } = pkg;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: resolve(__dirname, ".env") });
 
@@ -18,15 +17,17 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, "public");
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "claims.db");
 
-// ----------  STATE ----------
 let db;
 let openWindow = false;
 let winnerSelected = false;
 let windowExpiresAt = 0;
 
-// ----------  INIT DB THEN START ----------
+// ----------  INIT DB ----------
 async function initDB() {
-  const database = await open({ filename: DB_PATH, driver: sqlite3.Database });
+  const database = await sqlite.open({
+    filename: DB_PATH,
+    driver: sqlite3.Database
+  });
   await database.exec(`
     CREATE TABLE IF NOT EXISTS claims (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,6 +44,7 @@ async function initDB() {
   return database;
 }
 
+// ----------  VERIFY CAPTCHA ----------
 async function verifyCaptcha(token) {
   const secret = process.env.RECAPTCHA_SECRET;
   const resp = await fetch("https://www.google.com/recaptcha/api/siteverify", {
@@ -53,6 +55,7 @@ async function verifyCaptcha(token) {
   return resp.json();
 }
 
+// ----------  ADMIN AUTH ----------
 function requireAdmin(req, res, next) {
   const key = req.query.admin || req.headers["x-admin-key"];
   if (!process.env.ADMIN_PASSWORD) return res.status(500).send("ADMIN_PASSWORD not set");
@@ -60,7 +63,7 @@ function requireAdmin(req, res, next) {
   return res.status(401).send("unauthorized");
 }
 
-// ----------  START SERVER ----------
+// ----------  START AFTER DB READY ----------
 initDB()
   .then((database) => {
     db = database;
