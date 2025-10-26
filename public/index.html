@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>The $20 Dollar Game</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif;text-align:center;padding:6% 10%}
+    h1{font-size:3rem;font-weight:800;margin:0 0 .3rem}
+    h2{font-size:1.1rem;font-weight:400;color:#333;margin:0 0 2rem}
+    input,select,button{font-size:1rem;padding:.6rem .8rem;margin:.4rem 0;width:100%}
+    button{cursor:pointer}
+    .hidden{display:none}
+    footer{font-size:.65rem;color:#777;margin-top:3rem}
+    .bold{font-weight:700}
+  </style>
+</head>
+<body>
+  <h1>The $20 Dollar Game</h1>
+  <h2>Visit each day for your chance to claim $20. One winner each day.</h2>
+
+  <div id="openArea" class="hidden">
+    <p class="bold">Claim window is OPEN — submit quickly!</p>
+    <form id="claimForm">
+      <input name="name" placeholder="Full name" required />
+      <select name="payout_method" id="payout_method" required>
+        <option value="">Select payout method</option>
+        <option value="venmo">Venmo</option>
+        <option value="paypal">PayPal</option>
+        <option value="cashapp">Cash App</option>
+      </select>
+      <input name="payout_id" placeholder="@handle / email / $cashtag" required />
+
+      <!-- Google reCAPTCHA -->
+      <div class="g-recaptcha" data-sitekey="6LfLXvcrAAAAAH0cf_DY23IPqJPDMIvJ5sO1LwLG"></div>
+
+      <button type="submit">Submit Claim</button>
+    </form>
+    <div id="result" class="bold"></div>
+  </div>
+
+  <div id="closedArea">
+    <p id="message" class="bold">
+      Today's $20 has been claimed. Try again in <span id="timer">--</span>
+    </p>
+  </div>
+
+  <footer>
+    © 2025 The $20 Dollar Game · No purchase necessary · Void where prohibited · Winners responsible for taxes.
+  </footer>
+
+  <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+  <script>
+  async function getState(){
+    try{
+      const res = await fetch('/state', {cache:'no-store'});
+      const j = await res.json();
+      const open = j.openWindow === true;
+      document.getElementById('openArea').classList.toggle('hidden', !open);
+      document.getElementById('closedArea').classList.toggle('hidden', open);
+    }catch(e){console.error(e);}
+  }
+
+  function updateTimer(){
+    const now=new Date();
+    const next=new Date(); next.setHours(24,0,0,0);
+    const diff=next-now;
+    const h=Math.floor(diff/3600000),m=Math.floor(diff%3600000/60000),s=Math.floor(diff%60000/1000);
+    document.getElementById('timer').innerText=`${h}h ${m}m ${s}s`;
+  }
+
+  document.getElementById('claimForm').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const f=e.target;
+    const token=grecaptcha.getResponse();
+    if(!token){alert("Please complete the captcha first.");return;}
+    const data={
+      name:f.name.value,
+      payout_id:f.payout_id.value,
+      payout_method:f.payout_method.value,
+      captcha:token
+    };
+    const res=await fetch('/claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    const j=await res.json();
+    const out=document.getElementById('result');
+    if(!j.ok){out.innerText=j.msg||'Error submitting claim';return;}
+    if(j.winner){out.innerText='🎉 YOU WON! Admin will confirm payout soon.';}
+    else{out.innerText='Entry recorded. Good luck!';}
+    grecaptcha.reset();
+  });
+
+  setInterval(getState,2000);
+  setInterval(updateTimer,1000);
+  getState(); updateTimer();
+  </script>
+</body>
+</html>

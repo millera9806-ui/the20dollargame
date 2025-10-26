@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Admin - The $20 Dollar Game</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;margin:30px}
+    h1{margin-bottom:0}
+    input,button{padding:6px 10px;margin:4px}
+    pre{background:#f8f8f8;padding:10px;border:1px solid #ddd;overflow:auto}
+    .winner{font-weight:bold;font-size:1.2rem;color:green;margin-top:10px}
+  </style>
+</head>
+<body>
+  <h1>Admin Panel</h1>
+  <p>Enter admin key (from .env):</p>
+  <input id="adminkey" placeholder="admin password" />
+  <button id="open">Open window (60s)</button>
+  <button id="load">Load recent claims</button>
+  <div id="winner" class="winner"></div>
+  <pre id="out"></pre>
+
+<script>
+async function openWindow(){
+  const key = document.getElementById("adminkey").value.trim();
+  if(!key){ alert("Enter admin password first."); return; }
+  try{
+    const res = await fetch(`http://localhost:3000/admin/open?admin=${encodeURIComponent(key)}&seconds=60`, { method: "POST" });
+    const text = await res.text();
+    document.getElementById("out").innerText = text;
+    alert("Opened window: " + text);
+  }catch(e){
+    alert("Error: " + e);
+  }
+}
+
+async function loadClaims(){
+  const key = document.getElementById("adminkey").value.trim();
+  if(!key){ alert("Enter admin password first."); return; }
+  try{
+    const res = await fetch(`http://localhost:3000/admin/claims?admin=${encodeURIComponent(key)}`);
+    const data = await res.json();
+    document.getElementById("out").innerText = JSON.stringify(data, null, 2);
+
+    // find and display the winner
+    const winner = data.find(c => c.is_winner === 1);
+    if(winner){
+      document.getElementById("winner").innerText =
+        `🎉 Winner: ${winner.name} (${winner.payout_method}: ${winner.payout_id})`;
+    } else {
+      document.getElementById("winner").innerText = "No winner yet.";
+    }
+
+  }catch(e){
+    alert("Error: " + e);
+  }
+}
+
+document.getElementById("open").addEventListener("click", openWindow);
+document.getElementById("load").addEventListener("click", loadClaims);
+</script>
+</body>
+</html>
