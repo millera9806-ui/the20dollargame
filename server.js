@@ -1,8 +1,8 @@
-// server.js — full production-ready version
+// server.js — production-ready Render-safe version
 import express from "express";
 import bodyParser from "body-parser";
 import sqlite3 from "sqlite3";
-import { open } from "sqlite";
+import pkg from "sqlite";                 // CommonJS-compatible import
 import cron from "node-cron";
 import path, { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -10,6 +10,10 @@ import dotenv from "dotenv";
 import cors from "cors";
 import fetch from "node-fetch";
 
+// destructure open safely from sqlite
+const { open } = pkg;
+
+// setup env + paths
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: resolve(__dirname, ".env") });
 
@@ -18,12 +22,13 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, "public");
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "claims.db");
 
+// middleware
 app.use(cors());
 app.use(express.static(PUBLIC));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Enforce HTTPS and canonical www
+// HTTPS redirect + canonical www
 app.set("trust proxy", true);
 app.use((req, res, next) => {
   if (req.headers["x-forwarded-proto"] && req.headers["x-forwarded-proto"] !== "https") {
@@ -35,7 +40,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Database
+// database setup
 let db;
 (async () => {
   db = await open({ filename: DB_PATH, driver: sqlite3.Database });
@@ -54,12 +59,12 @@ let db;
   console.log("✅ Database ready");
 })().catch(console.error);
 
-// State
+// game state
 let openWindow = false;
 let winnerSelected = false;
 let windowExpiresAt = 0;
 
-// Helpers
+// helpers
 function requireAdmin(req, res, next) {
   const key = req.query.admin || req.headers["x-admin-key"];
   if (!process.env.ADMIN_PASSWORD) return res.status(500).send("ADMIN_PASSWORD not set");
@@ -77,7 +82,7 @@ async function verifyCaptcha(token) {
   return resp.json();
 }
 
-// Routes
+// routes
 app.get("/state", (req, res) => {
   const remaining = Math.max(0, Math.floor((windowExpiresAt - Date.now()) / 1000));
   res.json({ openWindow, remaining });
@@ -88,7 +93,8 @@ app.post("/claim", async (req, res) => {
     if (!openWindow) return res.status(400).json({ ok: false, msg: "Window closed" });
 
     const { name, payout_method, payout_id, captcha } = req.body;
-    if (!name || !payout_method || !payout_id) return res.status(400).json({ ok: false, msg: "Missing fields" });
+    if (!name || !payout_method || !payout_id)
+      return res.status(400).json({ ok: false, msg: "Missing fields" });
 
     const capRes = await verifyCaptcha(captcha);
     if (!capRes.success) return res.status(400).json({ ok: false, msg: "Captcha failed" });
@@ -132,7 +138,7 @@ app.post("/admin/open", requireAdmin, (req, res) => {
   res.json({ ok: true, opened_for: seconds });
 });
 
-// Schedule daily open
+// cron job (daily auto-open)
 cron.schedule(process.env.CRON_SCHEDULE || "0 18 * * *", () => {
   const seconds = parseInt(process.env.WINDOW_SECONDS || "60");
   openWindow = true;
