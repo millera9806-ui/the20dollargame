@@ -1,7 +1,9 @@
 {
   "name": "the20dollargame",
-  "version": "1.1.0",
+  "version": "1.2.0",
+  "description": "A simple website where one lucky visitor can claim $20 every day.",
   "type": "module",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
@@ -12,7 +14,19 @@
     "express": "^4.18.2",
     "node-cron": "^3.0.3",
     "node-fetch": "^3.3.2",
-    "sqlite": "^3.0.0",
+    "sqlite": "^4.2.1",
     "sqlite3": "^5.1.7"
-  }
+  },
+  "engines": {
+    "node": ">=18.x"
+  },
+  "keywords": [
+    "game",
+    "bitcoin",
+    "giveaway",
+    "express",
+    "sqlite"
+  ],
+  "author": "the20dollargame.com",
+  "license": "MIT"
 }

@@ -1,8 +1,8 @@
-// server.js — Render-stable final version
+// server.js — stable for sqlite v4+
 import express from "express";
 import bodyParser from "body-parser";
 import sqlite3 from "sqlite3";
-import * as sqlite from "sqlite";
+import { open } from "sqlite"; // works with sqlite >=4
 import cron from "node-cron";
 import path, { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -24,7 +24,7 @@ let windowExpiresAt = 0;
 
 // ----------  INIT DB ----------
 async function initDB() {
-  const database = await sqlite.open({
+  const database = await open({
     filename: DB_PATH,
     driver: sqlite3.Database
   });
