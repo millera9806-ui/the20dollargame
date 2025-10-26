@@ -40,7 +40,10 @@
           <option value="cashapp">Cash App</option>
         </select>
         <input name="payout_id" placeholder="@handle / email / $cashtag" required />
-        <div class="g-recaptcha" data-sitekey="6LfLXvcrAAAAAH0cf_DY23IPqJPDMIvJ5sO1LwLG"></div>
+
+        <!-- updated reCAPTCHA site key -->
+        <div class="g-recaptcha" data-sitekey="6Ld5jPcrAAAAAC2AIHOXBMgFSq38v1no6u83dEfn"></div>
+
         <button type="submit">Submit Claim</button>
       </form>
       <div id="result" class="bold" style="margin-top:1rem"></div>
@@ -68,6 +71,7 @@
         document.getElementById('closedArea').classList.toggle('hidden',open);
       }catch(e){console.error('state err',e);}
     }
+
     function updateTimer(){
       const now=new Date(),next=new Date();next.setHours(24,0,0,0);
       const diff=next-now,hrs=Math.floor(diff/3600000),
@@ -75,6 +79,7 @@
       secs=Math.floor((diff%60000)/1000);
       document.getElementById('timer').innerText=`${hrs}h ${mins}m ${secs}s`;
     }
+
     document.getElementById('claimForm').addEventListener('submit',async(e)=>{
       e.preventDefault();
       const f=e.target,token=grecaptcha.getResponse();
@@ -88,7 +93,9 @@
       setTimeout(()=>{document.getElementById('openArea').classList.add('hidden');},1500);
       document.getElementById('closedArea').classList.remove('hidden');
     });
-    setInterval(getState,2000);setInterval(updateTimer,1000);
+
+    setInterval(getState,2000);
+    setInterval(updateTimer,1000);
     getState();updateTimer();
   </script>
 </body>
