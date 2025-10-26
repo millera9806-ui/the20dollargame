@@ -1,8 +1,8 @@
-// server.js — stable for sqlite v4+
+// server.js — Render-ready final build (persistent DB, captcha, admin)
 import express from "express";
 import bodyParser from "body-parser";
 import sqlite3 from "sqlite3";
-import { open } from "sqlite"; // works with sqlite >=4
+import { open } from "sqlite";
 import cron from "node-cron";
 import path, { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -15,7 +15,9 @@ dotenv.config({ path: resolve(__dirname, ".env") });
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, "public");
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, "claims.db");
+
+// ✅ Always use /data on Render (writable disk)
+const DB_PATH = process.env.DB_PATH || "/data/claims.db";
 
 let db;
 let openWindow = false;
@@ -24,24 +26,31 @@ let windowExpiresAt = 0;
 
 // ----------  INIT DB ----------
 async function initDB() {
-  const database = await open({
-    filename: DB_PATH,
-    driver: sqlite3.Database
-  });
-  await database.exec(`
-    CREATE TABLE IF NOT EXISTS claims (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT,
-      payout_method TEXT,
-      payout_id TEXT,
-      created_at INTEGER,
-      is_winner INTEGER DEFAULT 0,
-      paid INTEGER DEFAULT 0,
-      admin_note TEXT
-    );
-  `);
-  console.log("✅ Database ready");
-  return database;
+  try {
+    db = await open({
+      filename: DB_PATH,
+      driver: sqlite3.Database
+    });
+
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS claims (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        payout_method TEXT,
+        payout_id TEXT,
+        created_at INTEGER,
+        is_winner INTEGER DEFAULT 0,
+        paid INTEGER DEFAULT 0,
+        admin_note TEXT
+      );
+    `);
+
+    console.log("✅ Database ready at", DB_PATH);
+    return db;
+  } catch (err) {
+    console.error("DB init error:", err);
+    throw err;
+  }
 }
 
 // ----------  VERIFY CAPTCHA ----------
@@ -65,15 +74,14 @@ function requireAdmin(req, res, next) {
 
 // ----------  START AFTER DB READY ----------
 initDB()
-  .then((database) => {
-    db = database;
-
+  .then(() => {
     const app = express();
     app.use(cors());
     app.use(express.static(PUBLIC));
     app.use(bodyParser.json());
     app.use(bodyParser.urlencoded({ extended: true }));
 
+    // HTTPS redirect + canonical www
     app.set("trust proxy", true);
     app.use((req, res, next) => {
       if (req.headers["x-forwarded-proto"] && req.headers["x-forwarded-proto"] !== "https") {
@@ -153,6 +161,7 @@ initDB()
       setTimeout(() => (openWindow = false), seconds * 1000);
     });
 
+    // ---------- HEALTH CHECK ----------
     app.get("/health", (req, res) => {
       res.json({ ok: true, openWindow });
     });
