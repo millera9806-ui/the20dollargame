@@ -1,107 +1,91 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>The $20 Dollar Game</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    body{background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif;text-align:center;padding:6% 10%}
-    h1{font-size:2.4rem;font-weight:800;margin:0 0 .3rem}
-    h2{font-size:1rem;font-weight:400;color:#333;margin:0 0 1.6rem}
-    .card{max-width:560px;margin:0 auto}
-    input,select,button{font-size:1rem;padding:.6rem .8rem;margin:.4rem 0;width:100%}
-    button{cursor:pointer}
-    .hidden{display:none}
-    footer{font-size:.75rem;color:#777;margin-top:2.5rem}
-    header{position:absolute;top:1.2rem;right:1.5rem;font-size:.9rem}
-    header a{color:#000;text-decoration:none;margin-left:1rem;font-weight:600}
-    header a:hover{text-decoration:underline}
-    .bold{font-weight:700}
-  </style>
-
-<!-- Google AdSense Verification & Ads Script -->
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4911876990879535"
-     crossorigin="anonymous"></script>
-
+  <link rel="stylesheet" href="style.css">
+  <script async src="https://www.google.com/recaptcha/api.js" defer></script>
 </head>
 <body>
   <header>
-    <a href="/faq.html">FAQ</a>
-    <a href="/contact.html">Contact Us</a>
+    <h1>The $20 Dollar Game</h1>
+    <nav>
+      <a href="/faq.html">FAQ</a>
+      <a href="/contact.html">Contact</a>
+    </nav>
   </header>
 
-  <div class="card">
-    <h1>The $20 Dollar Game</h1>
-    <h2>Visit each day for your chance to claim $20. One winner each day.</h2>
+  <main>
+    <h2 id="game-status" class="closed-message">Today’s $20 has been claimed — try your luck again tomorrow!</h2>
 
-    <div id="openArea" class="hidden">
-      <p class="bold">Claim window is OPEN — submit quickly!</p>
-      <form id="claimForm">
-        <input name="name" placeholder="Full name" required />
-        <select name="payout_method" id="payout_method" required>
-          <option value="">Select payout method</option>
-          <option value="venmo">Venmo</option>
-          <option value="paypal">PayPal</option>
-          <option value="cashapp">Cash App</option>
-        </select>
-        <input name="payout_id" placeholder="@handle / email / $cashtag" required />
+    <form id="claim-form">
+      <select id="method" required>
+        <option value="">Choose payout method</option>
+        <option value="Venmo">Venmo</option>
+        <option value="PayPal">PayPal</option>
+        <option value="CashApp">CashApp</option>
+      </select>
+      <input id="handle" type="text" placeholder="Enter your username or handle" required>
+      <div class="g-recaptcha" data-sitekey="6LeKj_crAAAAAHt5YPYgUc3DSzTyVlkNdFKyk-3Z"></div>
+      <button class="claim-btn" type="submit">Gimme that $20</button>
+    </form>
 
-        <!-- ✅ updated reCAPTCHA site key -->
-        <div class="g-recaptcha" data-sitekey="6LeKj_crAAAAAHt5YPYgUc3DSzTyVlkNdFKyk-3Z"></div>
-
-        <button type="submit">Submit Claim</button>
-      </form>
-      <div id="result" class="bold" style="margin-top:1rem"></div>
+    <div id="overlay" class="hidden">
+      <h2 id="overlay-text">Good luck! Waiting for results...</h2>
+      <p id="countdown"></p>
     </div>
+  </main>
 
-    <div id="closedArea">
-      <p id="message" class="bold">
-        Today's $20 has been claimed. Try again in <span id="timer">--</span>
-      </p>
-    </div>
-  </div>
+  <div id="winner-ticker"><span id="ticker-text"></span></div>
 
-  <footer>
-    © 2025 The $20 Dollar Game · No purchase necessary · Void where prohibited.
-  </footer>
-
-  <script src="https://www.google.com/recaptcha/api.js" async defer></script>
   <script>
-    async function getState(){
-      try{
-        const res = await fetch('/state',{cache:'no-store'});
-        const j = await res.json();
-        const open = j.openWindow === true;
-        document.getElementById('openArea').classList.toggle('hidden',!open);
-        document.getElementById('closedArea').classList.toggle('hidden',open);
-      }catch(e){console.error('state err',e);}
+    async function fetchState() {
+      const res = await fetch("/state");
+      return res.json();
     }
 
-    function updateTimer(){
-      const now=new Date(),next=new Date();next.setHours(24,0,0,0);
-      const diff=next-now,hrs=Math.floor(diff/3600000),
-      mins=Math.floor((diff%3600000)/60000),
-      secs=Math.floor((diff%60000)/1000);
-      document.getElementById('timer').innerText=`${hrs}h ${mins}m ${secs}s`;
+    async function loadTicker() {
+      const { recent } = await fetchState();
+      const text = recent.map(r => `$${r.payout_id}`).join(" ⚡ ");
+      document.getElementById("ticker-text").textContent = "Recent Winners: " + text;
     }
+    loadTicker();
 
-    document.getElementById('claimForm').addEventListener('submit',async(e)=>{
+    document.getElementById("claim-form").addEventListener("submit", async e => {
       e.preventDefault();
-      const f=e.target,token=grecaptcha.getResponse();
-      if(!token){alert("Please complete the captcha first.");return;}
-      const data={name:f.name.value,payout_method:f.payout_method.value,payout_id:f.payout_id.value,captcha:token};
-      const res=await fetch('/claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-      const j=await res.json(),out=document.getElementById('result');
-      if(!j.ok){out.innerText=j.msg||'Error submitting claim';return;}
-      out.innerText=j.winner?'🎉 YOU WON! Admin will confirm payout soon.':'Thanks for your entry — good luck!';
-      f.reset();grecaptcha.reset();
-      setTimeout(()=>{document.getElementById('openArea').classList.add('hidden');},1500);
-      document.getElementById('closedArea').classList.remove('hidden');
-    });
+      const method = document.getElementById("method").value;
+      const handle = document.getElementById("handle").value;
+      const captcha = grecaptcha.getResponse();
 
-    setInterval(getState,2000);
-    setInterval(updateTimer,1000);
-    getState();updateTimer();
+      const res = await fetch("/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payout_method: method, payout_id: handle, captcha })
+      });
+
+      const data = await res.json();
+      if (!data.ok) return alert(data.msg || "Error");
+
+      const overlay = document.getElementById("overlay");
+      overlay.classList.remove("hidden");
+      let counter = 60;
+      const countdown = document.getElementById("countdown");
+      const text = document.getElementById("overlay-text");
+
+      const timer = setInterval(() => {
+        countdown.textContent = `${counter}s`;
+        counter--;
+        if (counter < 0) {
+          clearInterval(timer);
+          if (data.winner) {
+            text.textContent = "🎉 You won! Check your inbox soon!";
+          } else {
+            text.textContent = `Better luck next time — you were #${data.position}!`;
+          }
+        }
+      }, 1000);
+    });
   </script>
 </body>
 </html>
