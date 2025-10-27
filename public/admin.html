@@ -1,71 +1,124 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Admin - The $20 Dollar Game</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin – The $20 Dollar Game</title>
   <style>
-    body{font-family:Arial,Helvetica,sans-serif;margin:30px;max-width:900px}
-    h1{margin-bottom:0}
-    input,button,textarea{padding:8px;margin:6px 0}
-    .out{white-space:pre-wrap;background:#fafafa;border:1px solid #eee;padding:10px}
-    .winner{font-weight:700;color:green;margin-top:12px}
-    table{width:100%;border-collapse:collapse;margin-top:12px}
-    th,td{border:1px solid #ddd;padding:6px}
-    th{background:#f5f5f5}
+    body {
+      background: #fff;
+      color: #000;
+      font-family: "Helvetica Neue", Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 2em;
+    }
+
+    h1 {
+      font-weight: 800;
+      margin-bottom: 0.5em;
+    }
+
+    button {
+      background-color: #2ecc71;
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+      margin: 10px;
+    }
+
+    button:hover {
+      background-color: #27ae60;
+    }
+
+    #claims {
+      width: 90%;
+      margin: 20px auto;
+      border-collapse: collapse;
+      border: 1px solid #ddd;
+      font-size: 0.9em;
+    }
+
+    #claims th, #claims td {
+      border: 1px solid #ddd;
+      padding: 8px;
+    }
+
+    #claims th {
+      background: #f0f0f0;
+      font-weight: bold;
+    }
+
+    footer {
+      font-size: 0.75em;
+      color: #777;
+      margin-top: 3em;
+    }
   </style>
-
-<!-- Google AdSense Verification & Ads Script -->
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4911876990879535"
-     crossorigin="anonymous"></script>
-
-
 </head>
 <body>
-  <h1>Admin Panel</h1>
-  <p>Enter admin key (from Render env / .env):</p>
-  <input id="adminkey" placeholder="admin password" style="width:260px" />
-  <button id="open">Open window (60s)</button>
-  <button id="load">Load recent claims</button>
-  <div id="winner" class="winner"></div>
-  <div id="out" class="out"></div>
+  <h1>Admin Dashboard</h1>
+  <p>Use this panel to open the daily claim window and review entries.</p>
 
-<script>
-async function openWindow(){
-  const key = document.getElementById("adminkey").value.trim();
-  if(!key){ alert("Enter admin password first."); return; }
-  try{
-    const res = await fetch(`/admin/open?admin=${encodeURIComponent(key)}&seconds=60`, { method: "POST" });
-    const j = await res.json();
-    document.getElementById("out").innerText = JSON.stringify(j, null, 2);
-    alert("Opened window: " + (j.opened_for || "60") + "s");
-  }catch(e){
-    alert("Error: " + e);
-  }
-}
+  <div>
+    <input type="password" id="adminKey" placeholder="Admin password" />
+    <button onclick="openWindow()">Open 60s Window</button>
+    <button onclick="loadClaims()">Refresh Claims</button>
+  </div>
 
-async function loadClaims(){
-  const key = document.getElementById("adminkey").value.trim();
-  if(!key){ alert("Enter admin password first."); return; }
-  try{
-    const res = await fetch(`/admin/claims?admin=${encodeURIComponent(key)}`);
-    if (!res.ok) { alert("Auth failed or server error"); return; }
-    const data = await res.json();
-    document.getElementById("out").innerText = JSON.stringify(data, null, 2);
-    const winner = data.find(c => c.is_winner === 1);
-    if (winner) {
-      document.getElementById("winner").innerText =
-        `🎉 Winner: ${winner.name} (${winner.payout_method}: ${winner.payout_id}) — Paid: ${winner.paid ? 'YES' : 'NO'}`;
-    } else {
-      document.getElementById("winner").innerText = "No winner yet.";
+  <table id="claims">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Method</th>
+        <th>Handle</th>
+        <th>Winner</th>
+        <th>Time</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <footer>
+    © 2025 The $20 Dollar Game | Admin Panel
+  </footer>
+
+  <script>
+    async function openWindow() {
+      const key = document.getElementById("adminKey").value.trim();
+      if (!key) return alert("Enter admin password");
+      const res = await fetch(`/admin/open?seconds=60&admin=${key}`, { method: "POST" });
+      const data = await res.json();
+      if (data.ok) alert("✅ Claim window opened for 60 seconds");
+      else alert("❌ Failed to open window");
     }
-  }catch(e){
-    alert("Error: " + e);
-  }
-}
 
-document.getElementById("open").addEventListener("click", openWindow);
-document.getElementById("load").addEventListener("click", loadClaims);
-</script>
+    async function loadClaims() {
+      const key = document.getElementById("adminKey").value.trim();
+      if (!key) return alert("Enter admin password");
+
+      const res = await fetch(`/admin/claims?admin=${key}`);
+      if (!res.ok) return alert("Failed to fetch claims");
+
+      const data = await res.json();
+      const tbody = document.querySelector("#claims tbody");
+      tbody.innerHTML = "";
+
+      data.forEach(c => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${c.id}</td>
+          <td>${c.payout_method}</td>
+          <td>${c.payout_id}</td>
+          <td>${c.is_winner ? "🏆 YES" : "—"}</td>
+          <td>${new Date(c.created_at).toLocaleTimeString()}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+  </script>
 </body>
 </html>

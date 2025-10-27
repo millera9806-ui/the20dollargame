@@ -1,8 +1,8 @@
-// server.js — Render-stable version (Node 25 compatible)
+// server.js — Render-stable version with working admin panel + position tracking
 import express from "express";
 import bodyParser from "body-parser";
 import sqlite3 from "sqlite3";
-import * as sqlite from "sqlite"; // <-- fixed import
+import * as sqlite from "sqlite"; // Node 25 fix
 import cron from "node-cron";
 import path, { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -111,6 +111,18 @@ app.post("/claim", async (req, res) => {
   }
 });
 
+// --- ADMIN VIEW CLAIMS ---
+app.get("/admin/claims", requireAdmin, async (req, res) => {
+  try {
+    const rows = await db.all(`SELECT * FROM claims ORDER BY created_at DESC LIMIT 100`);
+    res.json(rows);
+  } catch (err) {
+    console.error("Admin fetch error:", err);
+    res.status(500).json({ ok: false, msg: "Server error" });
+  }
+});
+
+// --- ADMIN OPEN WINDOW ---
 app.post("/admin/open", requireAdmin, (req, res) => {
   const seconds = parseInt(req.query.seconds || "60", 10);
   openWindow = true;
