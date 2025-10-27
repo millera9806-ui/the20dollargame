@@ -53,7 +53,81 @@
     const overlayText = document.getElementById("overlay-text");
     const countdownEl = document.getElementById("countdown");
 
-    // ---- Fetch state from backend ----
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The $20 Dollar Game | Win $20 Every Day</title>
+
+  <!-- SEO + favicon -->
+  <meta name="description" content="The $20 Dollar Game — one winner every day. When the one-minute window opens, be the first to claim $20!" />
+  <link rel="icon" href="/favicon.png" />
+  <link rel="stylesheet" href="style.css" />
+  <script async src="https://www.google.com/recaptcha/api.js" defer></script>
+</head>
+<body>
+  <header>
+    <h1>The $20 Dollar Game</h1>
+    <nav>
+      <a href="/faq.html">FAQ</a>
+      <a href="/contact.html">Contact</a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Intro text -->
+    <section id="intro">
+      <h2>Welcome to The $20 Dollar Game 💸</h2>
+      <p>
+        Every single day, a one-minute window opens where the first person to claim wins $20.  
+        No catches, no gimmicks — just fast fingers.  
+        When the window opens, hit <strong>“Gimme that $20”</strong> and hope you’re first!
+      </p>
+    </section>
+
+    <!-- Dynamic game state -->
+    <section id="game">
+      <h2 id="game-status" class="closed-message">Loading game status...</h2>
+
+      <form id="claim-form" class="hidden">
+        <select id="method" required>
+          <option value="">Choose payout method</option>
+          <option value="Venmo">Venmo</option>
+          <option value="PayPal">PayPal</option>
+          <option value="CashApp">CashApp</option>
+        </select>
+        <input id="handle" type="text" placeholder="@username or email" required />
+        <div class="g-recaptcha" data-sitekey="6LeKj_crAAAAAHt5YPYgUc3DSzTyVlkNdFKyk-3Z"></div>
+        <button class="claim-btn" type="submit">Gimme that $20</button>
+      </form>
+
+      <!-- suspense screen -->
+      <div id="overlay" class="hidden">
+        <h2 id="overlay-text">🤞 Fingers crossed...</h2>
+        <p id="countdown"></p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Winner ticker -->
+  <div id="winner-ticker"><span id="ticker-text"></span></div>
+
+  <footer>
+    <p>
+      © 2025 The $20 Dollar Game. No data is stored beyond basic claim info.  
+      <br />Support the game: <strong>$the20dollargame</strong> | Contact: the20dollargame@gmail.com
+    </p>
+  </footer>
+
+  <script>
+    const statusEl = document.getElementById("game-status");
+    const formEl = document.getElementById("claim-form");
+    const overlay = document.getElementById("overlay");
+    const overlayText = document.getElementById("overlay-text");
+    const countdownEl = document.getElementById("countdown");
+
+    // ---- Fetch backend state ----
     async function fetchState() {
       try {
         const res = await fetch("/state");
@@ -63,37 +137,37 @@
       }
     }
 
-    // ---- Update bottom ticker ----
+    // ---- Winner ticker ----
     async function loadTicker() {
       const { recent } = await fetchState();
       const text = recent.length
-        ? "Recent Winners: " + recent.map(r => `$${r.payout_id}`).join(" ⚡ ")
-        : "No winners yet. Be the first!";
+        ? "Recent Winners: " + recent.map(r => r.payout_id).join(" ⚡ ")
+        : "No winners yet — will you be the first?";
       document.getElementById("ticker-text").textContent = text;
     }
 
-    // ---- Control what the user sees ----
+    // ---- Main display logic ----
     async function renderState() {
       const { openWindow, remaining } = await fetchState();
 
       if (openWindow) {
-        // during window
-        statusEl.textContent = "🏁 The race is on — claim your $20 now!";
+        statusEl.textContent = "🏁 The window is open — hurry!";
         statusEl.classList.remove("closed-message");
         formEl.classList.remove("hidden");
       } else {
-        // outside of window
+        formEl.classList.add("hidden");
         if (remaining > 0) {
           statusEl.textContent = "Stay tuned — today's $20 hasn't been claimed yet!";
+          statusEl.classList.remove("closed-message");
         } else {
           statusEl.textContent = "Today's $20 has been claimed — try your luck again tomorrow!";
+          statusEl.classList.add("closed-message");
+          statusEl.style.color = "red";
         }
-        statusEl.classList.add("closed-message");
-        formEl.classList.add("hidden");
       }
     }
 
-    // ---- Handle claim submission ----
+    // ---- Claim submission ----
     formEl.addEventListener("submit", async e => {
       e.preventDefault();
       const method = document.getElementById("method").value;
@@ -108,24 +182,23 @@
       const data = await res.json();
 
       if (!data.ok) {
-        alert(data.msg || "Error");
+        alert(data.msg || "Error submitting claim");
         return;
       }
 
-      // hide form & show suspense screen
       formEl.classList.add("hidden");
       overlay.classList.remove("hidden");
-      overlayText.textContent = "🤞 Fingers crossed! Waiting for results...";
+      overlayText.textContent = "🤞 Fingers crossed...";
       let counter = 60;
       const timer = setInterval(() => {
-        countdownEl.textContent = `${counter}s`;
+        countdownEl.textContent = counter + "s";
         counter--;
         if (counter < 0) {
           clearInterval(timer);
           overlayText.textContent = data.winner
             ? "🎉 Congrats! You won $20!"
             : `Better luck next time — you were #${data.position}`;
-          loadTicker(); // refresh ticker with latest winner
+          loadTicker();
           setTimeout(() => {
             overlay.classList.add("hidden");
             renderState();
@@ -134,10 +207,10 @@
       }, 1000);
     });
 
-    // ---- initial setup ----
+    // ---- Init ----
     loadTicker();
     renderState();
-    setInterval(renderState, 15000); // refresh state every 15s
+    setInterval(renderState, 15000);
   </script>
 </body>
 </html>
