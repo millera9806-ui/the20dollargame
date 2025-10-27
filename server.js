@@ -1,4 +1,4 @@
-// server.js — full version with queue ranking + improved UX
+// server.js — stable Render-ready build
 import express from "express";
 import bodyParser from "body-parser";
 import sqlite3 from "sqlite3";
@@ -9,6 +9,7 @@ import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import cors from "cors";
 import fetch from "node-fetch";
+import fs from "fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: resolve(__dirname, ".env") });
@@ -16,7 +17,14 @@ dotenv.config({ path: resolve(__dirname, ".env") });
 const app = express();
 const PORT = process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, "public");
-const DB_PATH = path.join(__dirname, "data", "claims.db");
+
+// ✅ Always-writable DB location (persistent locally, temp on Render)
+const DB_PATH = process.env.DB_PATH || path.join("/tmp", "claims.db");
+
+// ensure directory exists
+try {
+  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+} catch {}
 
 app.use(cors());
 app.use(express.static(PUBLIC));
@@ -26,6 +34,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 let db;
 let dbReady = false;
 
+// ---------- DB INIT ----------
 async function initDB() {
   try {
     db = await open({ filename: DB_PATH, driver: sqlite3.Database });
@@ -39,17 +48,19 @@ async function initDB() {
       );
     `);
     dbReady = true;
-    console.log("✅ Database ready");
-  } catch (e) {
-    console.error("DB init error:", e);
+    console.log("✅ Database ready at", DB_PATH);
+  } catch (err) {
+    console.error("DB init error:", err);
   }
 }
 await initDB();
 
+// ---------- STATE ----------
 let openWindow = false;
-let windowExpiresAt = 0;
 let winnerSelected = false;
+let windowExpiresAt = 0;
 
+// ---------- HELPERS ----------
 function requireAdmin(req, res, next) {
   const key = req.query.admin || req.headers["x-admin-key"];
   if (!process.env.ADMIN_PASSWORD) return res.status(500).send("ADMIN_PASSWORD not set");
@@ -67,22 +78,26 @@ async function verifyCaptcha(token) {
   return r.json();
 }
 
+// ---------- ROUTES ----------
 app.get("/state", async (req, res) => {
   const remaining = Math.max(0, Math.floor((windowExpiresAt - Date.now()) / 1000));
-  const recent = await db.all(`SELECT payout_id FROM claims WHERE is_winner=1 ORDER BY created_at DESC LIMIT 10`);
+  const recent = dbReady
+    ? await db.all(`SELECT payout_id FROM claims WHERE is_winner=1 ORDER BY created_at DESC LIMIT 10`)
+    : [];
   res.json({ openWindow, remaining, recent });
 });
 
 app.post("/claim", async (req, res) => {
   try {
-    if (!dbReady) return res.status(503).json({ ok: false, msg: "DB not ready" });
-    if (!openWindow) return res.status(400).json({ ok: false, msg: "Window closed" });
+    if (!dbReady) return res.status(503).json({ ok: false, msg: "Database not ready." });
+    if (!openWindow) return res.status(400).json({ ok: false, msg: "Window closed." });
 
     const { payout_method, payout_id, captcha } = req.body;
-    if (!payout_method || !payout_id) return res.status(400).json({ ok: false, msg: "Missing fields" });
+    if (!payout_method || !payout_id)
+      return res.status(400).json({ ok: false, msg: "Missing fields." });
 
     const c = await verifyCaptcha(captcha);
-    if (!c.success) return res.status(400).json({ ok: false, msg: "Captcha failed" });
+    if (!c.success) return res.status(400).json({ ok: false, msg: "Captcha failed." });
 
     const now = Date.now();
     const insert = await db.run(
@@ -102,12 +117,12 @@ app.post("/claim", async (req, res) => {
     res.json({ ok: true, winner, position });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ ok: false, msg: "Server error" });
+    res.status(500).json({ ok: false, msg: "Server error." });
   }
 });
 
-app.get("/admin/claims", requireAdmin, async (req, res) => {
-  const rows = await db.all(`SELECT * FROM claims ORDER BY created_at DESC LIMIT 500`);
+app.get("/admin/claims", requireAdmin, async (_req, res) => {
+  const rows = dbReady ? await db.all(`SELECT * FROM claims ORDER BY created_at DESC LIMIT 500`) : [];
   res.json(rows);
 });
 
@@ -124,6 +139,7 @@ app.post("/admin/open", requireAdmin, (req, res) => {
   res.json({ ok: true, opened_for: seconds });
 });
 
+// ---------- CRON ----------
 cron.schedule(process.env.CRON_SCHEDULE || "0 18 * * *", () => {
   const seconds = parseInt(process.env.WINDOW_SECONDS || "60", 10);
   openWindow = true;
@@ -133,4 +149,5 @@ cron.schedule(process.env.CRON_SCHEDULE || "0 18 * * *", () => {
   setTimeout(() => (openWindow = false), seconds * 1000);
 });
 
+// ---------- START ----------
 app.listen(PORT, () => console.log(`🚀 Live on port ${PORT}`));
