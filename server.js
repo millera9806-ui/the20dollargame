@@ -136,14 +136,19 @@ app.post("/admin/open", requireAdmin, (req, res) => {
   res.json({ ok: true, opened_for: seconds });
 });
 
-// --- CRON AUTO WINDOW ---
-cron.schedule(process.env.CRON_SCHEDULE || "0 18 * * *", () => {
-  const seconds = parseInt(process.env.WINDOW_SECONDS || "60", 10);
-  openWindow = true;
-  winnerSelected = false;
-  windowExpiresAt = Date.now() + seconds * 1000;
-  console.log(`🕕 Auto-opened window for ${seconds}s`);
-  setTimeout(() => (openWindow = false), seconds * 1000);
-});
+// --- DAILY RESET AT MIDNIGHT ---
+cron.schedule("0 0 * * *", async () => {
+  try {
+    console.log("🌙 Midnight reset triggered");
+    openWindow = false;
+    winnerSelected = false;
+    windowExpiresAt = 0;
+
+    // Optionally mark previous day's claims as finalized
+    await db.run(`UPDATE claims SET paid = 1 WHERE is_winner = 1 AND paid = 0`);
+  } catch (err) {
+    console.error("Midnight reset error:", err);
+  }
+}, { timezone: "America/Los_Angeles" });
 
 app.listen(PORT, () => console.log(`🚀 Live on port ${PORT}`));
