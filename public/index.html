@@ -1,133 +1,149 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>The $20 Dollar Game | Win $20 Every Day</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The $20 Dollar Game</title>
+  <link rel="icon" href="/favicon.png">
+  <style>
+    body {
+      background-color: white;
+      color: black;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+    }
 
-  <!-- SEO + favicon -->
-  <meta name="description" content="Play The $20 Dollar Game – one winner every day. When the one-minute window opens, be the first to claim $20!" />
-  <link rel="icon" href="/favicon.png" />
-  <link rel="stylesheet" href="style.css" />
-  <script async src="https://www.google.com/recaptcha/api.js" defer></script>
+    h1 {
+      font-size: 3em;
+      font-weight: 800;
+      margin-top: 10%;
+      margin-bottom: 0.3em;
+    }
+
+    h2 {
+      font-size: 1.3em;
+      font-weight: 400;
+      color: #333;
+      margin-bottom: 2em;
+    }
+
+    #content {
+      margin-top: 1em;
+    }
+
+    #message {
+      font-size: 1.2em;
+      margin-top: 2em;
+      color: #222;
+      font-weight: bold;
+    }
+
+    select, input, button {
+      padding: 10px;
+      font-size: 1em;
+      margin: 8px;
+      width: 250px;
+      max-width: 80%;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+
+    button {
+      background-color: #2ecc71;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    button:hover {
+      background-color: #27ae60;
+    }
+
+    footer {
+      font-size: 0.7em;
+      color: #777;
+      position: relative;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      margin-top: 3em;
+      padding: 10px;
+      text-align: center;
+      line-height: 1.4em;
+    }
+
+    #winner-ticker {
+      background-color: black;
+      color: white;
+      overflow: hidden;
+      white-space: nowrap;
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+      padding: 0.5em;
+    }
+
+    #ticker-text {
+      display: inline-block;
+      animation: scrollText 20s linear infinite;
+    }
+
+    @keyframes scrollText {
+      0% { transform: translateX(100%); }
+      100% { transform: translateX(-100%); }
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .red {
+      color: red;
+    }
+  </style>
+  <script async src="https://www.google.com/recaptcha/api.js"></script>
 </head>
-<body>
-  <header>
-    <h1>The $20 Dollar Game</h1>
-    <nav>
-      <a href="/faq.html">FAQ</a>
-      <a href="/contact.html">Contact</a>
-    </nav>
-  </header>
 
-  <main>
-    <h2 id="game-status" class="closed-message">Loading game status...</h2>
+<body>
+  <h1>The $20 Dollar Game</h1>
+  <h2>Visit each day for your chance to claim $20.<br>One winner each day. No gimmicks, just fast fingers.</h2>
+
+  <div id="content">
+    <h3 id="status" class="red">Loading game status...</h3>
 
     <form id="claim-form" class="hidden">
       <select id="method" required>
-        <option value="">Choose payout method</option>
+        <option value="">Select payout method</option>
         <option value="Venmo">Venmo</option>
         <option value="PayPal">PayPal</option>
         <option value="CashApp">CashApp</option>
       </select>
-      <input id="handle" type="text" placeholder="Enter your username or handle" required />
+      <input id="handle" type="text" placeholder="@handle / email / $cashtag" required>
       <div class="g-recaptcha" data-sitekey="6LeKj_crAAAAAHt5YPYgUc3DSzTyVlkNdFKyk-3Z"></div>
-      <button class="claim-btn" type="submit">Gimme that $20</button>
+      <button type="submit">Gimme that $20</button>
     </form>
 
-    <!-- suspense screen -->
-    <div id="overlay" class="hidden">
-      <h2 id="overlay-text">Fingers crossed 🤞</h2>
-      <p id="countdown"></p>
-    </div>
-  </main>
+    <div id="countdown" class="hidden"></div>
+  </div>
 
-  <div id="winner-ticker"><span id="ticker-text"></span></div>
-
-  <footer><p>© 2025 The $20 Dollar Game</p></footer>
-
-  <script>
-    const statusEl = document.getElementById("game-status");
-    const formEl = document.getElementById("claim-form");
-    const overlay = document.getElementById("overlay");
-    const overlayText = document.getElementById("overlay-text");
-    const countdownEl = document.getElementById("countdown");
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>The $20 Dollar Game | Win $20 Every Day</title>
-
-  <!-- SEO + favicon -->
-  <meta name="description" content="The $20 Dollar Game — one winner every day. When the one-minute window opens, be the first to claim $20!" />
-  <link rel="icon" href="/favicon.png" />
-  <link rel="stylesheet" href="style.css" />
-  <script async src="https://www.google.com/recaptcha/api.js" defer></script>
-</head>
-<body>
-  <header>
-    <h1>The $20 Dollar Game</h1>
-    <nav>
-      <a href="/faq.html">FAQ</a>
-      <a href="/contact.html">Contact</a>
-    </nav>
-  </header>
-
-  <main>
-    <!-- Intro text -->
-    <section id="intro">
-      <h2>Welcome to The $20 Dollar Game 💸</h2>
-      <p>
-        Every single day, a one-minute window opens where the first person to claim wins $20.  
-        No catches, no gimmicks — just fast fingers.  
-        When the window opens, hit <strong>“Gimme that $20”</strong> and hope you’re first!
-      </p>
-    </section>
-
-    <!-- Dynamic game state -->
-    <section id="game">
-      <h2 id="game-status" class="closed-message">Loading game status...</h2>
-
-      <form id="claim-form" class="hidden">
-        <select id="method" required>
-          <option value="">Choose payout method</option>
-          <option value="Venmo">Venmo</option>
-          <option value="PayPal">PayPal</option>
-          <option value="CashApp">CashApp</option>
-        </select>
-        <input id="handle" type="text" placeholder="@username or email" required />
-        <div class="g-recaptcha" data-sitekey="6LeKj_crAAAAAHt5YPYgUc3DSzTyVlkNdFKyk-3Z"></div>
-        <button class="claim-btn" type="submit">Gimme that $20</button>
-      </form>
-
-      <!-- suspense screen -->
-      <div id="overlay" class="hidden">
-        <h2 id="overlay-text">🤞 Fingers crossed...</h2>
-        <p id="countdown"></p>
-      </div>
-    </section>
-  </main>
-
-  <!-- Winner ticker -->
-  <div id="winner-ticker"><span id="ticker-text"></span></div>
+  <div id="winner-ticker"><span id="ticker-text">Loading recent winners...</span></div>
 
   <footer>
-    <p>
-      © 2025 The $20 Dollar Game. No data is stored beyond basic claim info.  
-      <br />Support the game: <strong>$the20dollargame</strong> | Contact: the20dollargame@gmail.com
-    </p>
+    © 2025 The $20 Dollar Game<br>
+    No purchase necessary. Void where prohibited.<br>
+    Support the game: <strong>$the20dollargame</strong> | the20dollargame@gmail.com
   </footer>
 
   <script>
-    const statusEl = document.getElementById("game-status");
+    const statusEl = document.getElementById("status");
     const formEl = document.getElementById("claim-form");
-    const overlay = document.getElementById("overlay");
-    const overlayText = document.getElementById("overlay-text");
     const countdownEl = document.getElementById("countdown");
 
-    // ---- Fetch backend state ----
     async function fetchState() {
       try {
         const res = await fetch("/state");
@@ -137,7 +153,6 @@
       }
     }
 
-    // ---- Winner ticker ----
     async function loadTicker() {
       const { recent } = await fetchState();
       const text = recent.length
@@ -146,28 +161,21 @@
       document.getElementById("ticker-text").textContent = text;
     }
 
-    // ---- Main display logic ----
     async function renderState() {
       const { openWindow, remaining } = await fetchState();
 
       if (openWindow) {
-        statusEl.textContent = "🏁 The window is open — hurry!";
-        statusEl.classList.remove("closed-message");
+        statusEl.textContent = "🏁 The race is on — claim your $20 now!";
         formEl.classList.remove("hidden");
+        countdownEl.classList.add("hidden");
       } else {
         formEl.classList.add("hidden");
-        if (remaining > 0) {
-          statusEl.textContent = "Stay tuned — today's $20 hasn't been claimed yet!";
-          statusEl.classList.remove("closed-message");
-        } else {
-          statusEl.textContent = "Today's $20 has been claimed — try your luck again tomorrow!";
-          statusEl.classList.add("closed-message");
-          statusEl.style.color = "red";
-        }
+        countdownEl.classList.add("hidden");
+        statusEl.classList.add("red");
+        statusEl.textContent = "Today's $20 has been claimed — try your luck again tomorrow!";
       }
     }
 
-    // ---- Claim submission ----
     formEl.addEventListener("submit", async e => {
       e.preventDefault();
       const method = document.getElementById("method").value;
@@ -181,33 +189,23 @@
       });
       const data = await res.json();
 
-      if (!data.ok) {
-        alert(data.msg || "Error submitting claim");
-        return;
-      }
-
       formEl.classList.add("hidden");
-      overlay.classList.remove("hidden");
-      overlayText.textContent = "🤞 Fingers crossed...";
-      let counter = 60;
-      const timer = setInterval(() => {
-        countdownEl.textContent = counter + "s";
-        counter--;
-        if (counter < 0) {
-          clearInterval(timer);
-          overlayText.textContent = data.winner
-            ? "🎉 Congrats! You won $20!"
-            : `Better luck next time — you were #${data.position}`;
+      countdownEl.classList.remove("hidden");
+
+      let timer = 60;
+      const loop = setInterval(() => {
+        countdownEl.textContent = `⏳ ${timer}s left...`;
+        timer--;
+        if (timer < 0) {
+          clearInterval(loop);
+          countdownEl.innerHTML = data.winner
+            ? "🎉 You won! Admin will verify payout soon."
+            : `Better luck next time — you were #${data.position}.`;
           loadTicker();
-          setTimeout(() => {
-            overlay.classList.add("hidden");
-            renderState();
-          }, 7000);
         }
       }, 1000);
     });
 
-    // ---- Init ----
     loadTicker();
     renderState();
     setInterval(renderState, 15000);
