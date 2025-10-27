@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>The $20 Dollar Game</title>
-  <link rel="icon" href="/favicon.png" />
   <style>
     body {
       background: #fff;
@@ -20,19 +19,6 @@
       font-weight: 800;
       margin-top: 12%;
       margin-bottom: 0.3em;
-    }
-
-    header nav {
-      position: absolute;
-      top: 1.5em;
-      right: 2em;
-    }
-
-    header nav a {
-      margin-left: 1em;
-      text-decoration: none;
-      color: #000;
-      font-weight: 500;
     }
 
     h2 {
@@ -60,7 +46,6 @@
       font-size: 1em;
       margin: 8px;
       width: 250px;
-      max-width: 80%;
       border: 1px solid #ccc;
       border-radius: 5px;
     }
@@ -119,13 +104,6 @@
 </head>
 
 <body>
-  <header>
-    <nav>
-      <a href="/faq.html">FAQ</a>
-      <a href="/contact.html">Contact</a>
-    </nav>
-  </header>
-
   <h1>The $20 Dollar Game</h1>
   <h2>Visit each day for your chance to claim $20.<br>One winner each day. No gimmicks. Real cash.</h2>
 
@@ -157,8 +135,7 @@
     const clockEl = document.getElementById("clock");
     const statusEl = document.getElementById("status");
     const formEl = document.getElementById("claim-form");
-
-    let userResult = null; // store claim result
+    let userResult = null;
 
     async function fetchState() {
       try {
@@ -185,8 +162,8 @@
         const secs = String(remaining % 60).padStart(2, "0");
         clockEl.textContent = `${mins}:${secs}`;
         clockEl.classList.remove("hidden");
-        formEl.classList.remove("hidden");
-        if (!userResult) statusEl.textContent = "Fingers crossed — the $20 window is open!";
+        if (!userResult) formEl.classList.remove("hidden");
+        if (!userResult) statusEl.textContent = "Fingers crossed — waiting for results...";
       } else {
         clockEl.classList.add("hidden");
         formEl.classList.add("hidden");
@@ -207,6 +184,7 @@
       const handle = document.getElementById("handle").value;
       const captcha = grecaptcha.getResponse();
 
+      // hide immediately after click
       formEl.classList.add("hidden");
       statusEl.textContent = "Fingers crossed — waiting for results...";
 
