@@ -1,10 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>The $20 Dollar Game</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The $20 Dollar Game | Win $20 Every Day</title>
+
+  <!-- SEO + favicon -->
+  <meta name="description" content="Play The $20 Dollar Game – one winner every day. When the one-minute window opens, be the first to claim $20!" />
+  <link rel="icon" href="/favicon.png" />
+  <link rel="stylesheet" href="style.css" />
   <script async src="https://www.google.com/recaptcha/api.js" defer></script>
 </head>
 <body>
@@ -17,42 +21,80 @@
   </header>
 
   <main>
-    <h2 id="game-status" class="closed-message">Today’s $20 has been claimed — try your luck again tomorrow!</h2>
+    <h2 id="game-status" class="closed-message">Loading game status...</h2>
 
-    <form id="claim-form">
+    <form id="claim-form" class="hidden">
       <select id="method" required>
         <option value="">Choose payout method</option>
         <option value="Venmo">Venmo</option>
         <option value="PayPal">PayPal</option>
         <option value="CashApp">CashApp</option>
       </select>
-      <input id="handle" type="text" placeholder="Enter your username or handle" required>
+      <input id="handle" type="text" placeholder="Enter your username or handle" required />
       <div class="g-recaptcha" data-sitekey="6LeKj_crAAAAAHt5YPYgUc3DSzTyVlkNdFKyk-3Z"></div>
       <button class="claim-btn" type="submit">Gimme that $20</button>
     </form>
 
+    <!-- suspense screen -->
     <div id="overlay" class="hidden">
-      <h2 id="overlay-text">Good luck! Waiting for results...</h2>
+      <h2 id="overlay-text">Fingers crossed 🤞</h2>
       <p id="countdown"></p>
     </div>
   </main>
 
   <div id="winner-ticker"><span id="ticker-text"></span></div>
 
+  <footer><p>© 2025 The $20 Dollar Game</p></footer>
+
   <script>
+    const statusEl = document.getElementById("game-status");
+    const formEl = document.getElementById("claim-form");
+    const overlay = document.getElementById("overlay");
+    const overlayText = document.getElementById("overlay-text");
+    const countdownEl = document.getElementById("countdown");
+
+    // ---- Fetch state from backend ----
     async function fetchState() {
-      const res = await fetch("/state");
-      return res.json();
+      try {
+        const res = await fetch("/state");
+        return await res.json();
+      } catch {
+        return { openWindow: false, remaining: 0, recent: [] };
+      }
     }
 
+    // ---- Update bottom ticker ----
     async function loadTicker() {
       const { recent } = await fetchState();
-      const text = recent.map(r => `$${r.payout_id}`).join(" ⚡ ");
-      document.getElementById("ticker-text").textContent = "Recent Winners: " + text;
+      const text = recent.length
+        ? "Recent Winners: " + recent.map(r => `$${r.payout_id}`).join(" ⚡ ")
+        : "No winners yet. Be the first!";
+      document.getElementById("ticker-text").textContent = text;
     }
-    loadTicker();
 
-    document.getElementById("claim-form").addEventListener("submit", async e => {
+    // ---- Control what the user sees ----
+    async function renderState() {
+      const { openWindow, remaining } = await fetchState();
+
+      if (openWindow) {
+        // during window
+        statusEl.textContent = "🏁 The race is on — claim your $20 now!";
+        statusEl.classList.remove("closed-message");
+        formEl.classList.remove("hidden");
+      } else {
+        // outside of window
+        if (remaining > 0) {
+          statusEl.textContent = "Stay tuned — today's $20 hasn't been claimed yet!";
+        } else {
+          statusEl.textContent = "Today's $20 has been claimed — try your luck again tomorrow!";
+        }
+        statusEl.classList.add("closed-message");
+        formEl.classList.add("hidden");
+      }
+    }
+
+    // ---- Handle claim submission ----
+    formEl.addEventListener("submit", async e => {
       e.preventDefault();
       const method = document.getElementById("method").value;
       const handle = document.getElementById("handle").value;
@@ -63,29 +105,39 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ payout_method: method, payout_id: handle, captcha })
       });
-
       const data = await res.json();
-      if (!data.ok) return alert(data.msg || "Error");
 
-      const overlay = document.getElementById("overlay");
+      if (!data.ok) {
+        alert(data.msg || "Error");
+        return;
+      }
+
+      // hide form & show suspense screen
+      formEl.classList.add("hidden");
       overlay.classList.remove("hidden");
+      overlayText.textContent = "🤞 Fingers crossed! Waiting for results...";
       let counter = 60;
-      const countdown = document.getElementById("countdown");
-      const text = document.getElementById("overlay-text");
-
       const timer = setInterval(() => {
-        countdown.textContent = `${counter}s`;
+        countdownEl.textContent = `${counter}s`;
         counter--;
         if (counter < 0) {
           clearInterval(timer);
-          if (data.winner) {
-            text.textContent = "🎉 You won! Check your inbox soon!";
-          } else {
-            text.textContent = `Better luck next time — you were #${data.position}!`;
-          }
+          overlayText.textContent = data.winner
+            ? "🎉 Congrats! You won $20!"
+            : `Better luck next time — you were #${data.position}`;
+          loadTicker(); // refresh ticker with latest winner
+          setTimeout(() => {
+            overlay.classList.add("hidden");
+            renderState();
+          }, 7000);
         }
       }, 1000);
     });
+
+    // ---- initial setup ----
+    loadTicker();
+    renderState();
+    setInterval(renderState, 15000); // refresh state every 15s
   </script>
 </body>
 </html>
