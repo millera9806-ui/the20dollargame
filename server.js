@@ -1,15 +1,15 @@
-// server.js — final working version with position tracking + correct winner response
+// server.js — Render-stable version (Node 25 compatible)
 import express from "express";
 import bodyParser from "body-parser";
 import sqlite3 from "sqlite3";
-import sqlitePkg from "sqlite";
-const { open } = sqlitePkg;
+import * as sqlite from "sqlite"; // <-- fixed import
 import cron from "node-cron";
 import path, { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import cors from "cors";
 import fetch from "node-fetch";
+import fs from "fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: resolve(__dirname, ".env") });
@@ -17,23 +17,21 @@ dotenv.config({ path: resolve(__dirname, ".env") });
 const app = express();
 const PORT = process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, "public");
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data", "claims.db");
+const DB_DIR = path.join(__dirname, "data");
+const DB_PATH = path.join(DB_DIR, "claims.db");
 
 app.use(cors());
 app.use(express.static(PUBLIC));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// ensure DB dir exists
-import fs from "fs";
-if (!fs.existsSync(path.join(__dirname, "data"))) {
-  fs.mkdirSync(path.join(__dirname, "data"));
-}
+// ensure /data folder exists
+if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR);
 
-// DATABASE INIT
+// --- DATABASE INIT ---
 let db;
 async function initDB() {
-  db = await open({ filename: DB_PATH, driver: sqlite3.Database });
+  db = await sqlite.open({ filename: DB_PATH, driver: sqlite3.Database });
   await db.exec(`
     CREATE TABLE IF NOT EXISTS claims (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,12 +45,12 @@ async function initDB() {
 }
 await initDB();
 
-// STATE
+// --- GAME STATE ---
 let openWindow = false;
 let winnerSelected = false;
 let windowExpiresAt = 0;
 
-// CAPTCHA VERIFY
+// --- CAPTCHA ---
 async function verifyCaptcha(token) {
   const secret = process.env.RECAPTCHA_SECRET;
   const resp = await fetch("https://www.google.com/recaptcha/api/siteverify", {
@@ -63,7 +61,7 @@ async function verifyCaptcha(token) {
   return resp.json();
 }
 
-// ADMIN AUTH
+// --- ADMIN AUTH ---
 function requireAdmin(req, res, next) {
   const key = req.query.admin || req.headers["x-admin-key"];
   if (!process.env.ADMIN_PASSWORD) return res.status(500).send("ADMIN_PASSWORD not set");
@@ -71,16 +69,13 @@ function requireAdmin(req, res, next) {
   return res.status(401).send("unauthorized");
 }
 
-// ROUTES
-
-// check window state
+// --- ROUTES ---
 app.get("/state", async (req, res) => {
   const remaining = Math.max(0, Math.floor((windowExpiresAt - Date.now()) / 1000));
   const recent = await db.all(`SELECT payout_id FROM claims WHERE is_winner=1 ORDER BY created_at DESC LIMIT 10`);
   res.json({ openWindow, remaining, recent });
 });
 
-// claim submission
 app.post("/claim", async (req, res) => {
   try {
     if (!openWindow) return res.status(400).json({ ok: false, msg: "Window closed" });
@@ -91,10 +86,10 @@ app.post("/claim", async (req, res) => {
     const capRes = await verifyCaptcha(captcha);
     if (!capRes.success) return res.status(400).json({ ok: false, msg: "Captcha failed" });
 
-    const count = await db.get(`SELECT COUNT(*) AS total FROM claims WHERE created_at >= ?`, [windowExpiresAt - 60000]);
+    const now = Date.now();
+    const count = await db.get(`SELECT COUNT(*) AS total FROM claims WHERE created_at >= ?`, [now - 60000]);
     const position = count.total + 1;
 
-    const now = Date.now();
     const r = await db.run(
       `INSERT INTO claims (payout_method, payout_id, created_at) VALUES (?,?,?)`,
       [payout_method.trim(), payout_id.trim(), now]
@@ -116,7 +111,6 @@ app.post("/claim", async (req, res) => {
   }
 });
 
-// admin open window
 app.post("/admin/open", requireAdmin, (req, res) => {
   const seconds = parseInt(req.query.seconds || "60", 10);
   openWindow = true;
@@ -130,7 +124,7 @@ app.post("/admin/open", requireAdmin, (req, res) => {
   res.json({ ok: true, opened_for: seconds });
 });
 
-// cron job (optional auto-open)
+// --- CRON AUTO WINDOW ---
 cron.schedule(process.env.CRON_SCHEDULE || "0 18 * * *", () => {
   const seconds = parseInt(process.env.WINDOW_SECONDS || "60", 10);
   openWindow = true;
