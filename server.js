@@ -1,8 +1,8 @@
-// server.js — Render-stable version with calendar-day reset & working admin panel
+// server.js — Render-stable w/ calendar-day detection from DB (Pacific time)
 import express from "express";
 import bodyParser from "body-parser";
 import sqlite3 from "sqlite3";
-import * as sqlite from "sqlite"; // Node 25 fix
+import * as sqlite from "sqlite"; // Node 25+
 import cron from "node-cron";
 import path, { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -50,9 +50,6 @@ let openWindow = false;
 let winnerSelected = false;
 let windowExpiresAt = 0;
 
-// Track when last reset happened
-let lastResetDate = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
-
 // --- CAPTCHA ---
 async function verifyCaptcha(token) {
   const secret = process.env.RECAPTCHA_SECRET;
@@ -72,17 +69,44 @@ function requireAdmin(req, res, next) {
   return res.status(401).send("unauthorized");
 }
 
+// --- helpers: get Pacific midnight epoch ---
+function pacificMidnightMs() {
+  const now = new Date();
+  const pac = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+  pac.setHours(0, 0, 0, 0);
+  return pac.getTime();
+}
+
 // --- ROUTES ---
 app.get("/state", async (req, res) => {
   try {
-    const nowDate = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
-    const isNewDay = nowDate !== lastResetDate; // true if new calendar day since last midnight
     const remaining = Math.max(0, Math.floor((windowExpiresAt - Date.now()) / 1000));
+
+    const todayStart = pacificMidnightMs();
+
+    // any claims today?
+    const anyToday = await db.get(
+      `SELECT COUNT(*) AS c FROM claims WHERE created_at >= ?`,
+      [todayStart]
+    );
+    const hasAnyToday = (anyToday?.c || 0) > 0;
+
+    // winner today?
+    const winToday = await db.get(
+      `SELECT COUNT(*) AS w FROM claims WHERE is_winner=1 AND created_at >= ?`,
+      [todayStart]
+    );
+    const hasWinnerToday = (winToday?.w || 0) > 0;
+
+    // recent winners (ticker)
     const recent = await db.all(
       `SELECT payout_id FROM claims WHERE is_winner=1 ORDER BY created_at DESC LIMIT 10`
     );
 
-    res.json({ openWindow, remaining, recent, isNewDay });
+    // isNewDay = no claims yet today (pre-open state)
+    const isNewDay = !hasAnyToday;
+
+    res.json({ openWindow, remaining, recent, isNewDay, hasWinnerToday });
   } catch (err) {
     console.error("State error:", err);
     res.status(500).json({ ok: false, msg: "Server error" });
@@ -102,11 +126,13 @@ app.post("/claim", async (req, res) => {
       return res.status(400).json({ ok: false, msg: "Captcha failed" });
 
     const now = Date.now();
+
+    // position among claims in the last 60s (window)
     const count = await db.get(
       `SELECT COUNT(*) AS total FROM claims WHERE created_at >= ?`,
       [now - 60000]
     );
-    const position = count.total + 1;
+    const position = (count?.total || 0) + 1;
 
     const r = await db.run(
       `INSERT INTO claims (payout_method, payout_id, created_at) VALUES (?,?,?)`,
@@ -157,18 +183,16 @@ app.post("/admin/open", requireAdmin, (req, res) => {
   res.json({ ok: true, opened_for: seconds });
 });
 
-// --- DAILY RESET AT MIDNIGHT ---
+// --- DAILY RESET AT MIDNIGHT (Pacific) ---
 cron.schedule("0 0 * * *", async () => {
   try {
-    console.log("🌙 Midnight reset triggered");
+    console.log("🌙 Midnight reset (Pacific) triggered");
     openWindow = false;
     winnerSelected = false;
     windowExpiresAt = 0;
-    lastResetDate = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
   } catch (err) {
     console.error("Midnight reset error:", err);
   }
 }, { timezone: "America/Los_Angeles" });
 
 app.listen(PORT, () => console.log(`🚀 Live on port ${PORT}`));
-
