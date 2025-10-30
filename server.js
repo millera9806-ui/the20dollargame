@@ -1,4 +1,4 @@
-// server.js — Render-stable version with working admin panel + position tracking
+// server.js — Render-stable version with calendar-day reset & working admin panel
 import express from "express";
 import bodyParser from "body-parser";
 import sqlite3 from "sqlite3";
@@ -50,6 +50,9 @@ let openWindow = false;
 let winnerSelected = false;
 let windowExpiresAt = 0;
 
+// Track when last reset happened
+let lastResetDate = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
+
 // --- CAPTCHA ---
 async function verifyCaptcha(token) {
   const secret = process.env.RECAPTCHA_SECRET;
@@ -71,9 +74,19 @@ function requireAdmin(req, res, next) {
 
 // --- ROUTES ---
 app.get("/state", async (req, res) => {
-  const remaining = Math.max(0, Math.floor((windowExpiresAt - Date.now()) / 1000));
-  const recent = await db.all(`SELECT payout_id FROM claims WHERE is_winner=1 ORDER BY created_at DESC LIMIT 10`);
-  res.json({ openWindow, remaining, recent });
+  try {
+    const nowDate = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
+    const isNewDay = nowDate !== lastResetDate; // true if new calendar day since last midnight
+    const remaining = Math.max(0, Math.floor((windowExpiresAt - Date.now()) / 1000));
+    const recent = await db.all(
+      `SELECT payout_id FROM claims WHERE is_winner=1 ORDER BY created_at DESC LIMIT 10`
+    );
+
+    res.json({ openWindow, remaining, recent, isNewDay });
+  } catch (err) {
+    console.error("State error:", err);
+    res.status(500).json({ ok: false, msg: "Server error" });
+  }
 });
 
 app.post("/claim", async (req, res) => {
@@ -81,13 +94,18 @@ app.post("/claim", async (req, res) => {
     if (!openWindow) return res.status(400).json({ ok: false, msg: "Window closed" });
 
     const { payout_method, payout_id, captcha } = req.body;
-    if (!payout_method || !payout_id) return res.status(400).json({ ok: false, msg: "Missing fields" });
+    if (!payout_method || !payout_id)
+      return res.status(400).json({ ok: false, msg: "Missing fields" });
 
     const capRes = await verifyCaptcha(captcha);
-    if (!capRes.success) return res.status(400).json({ ok: false, msg: "Captcha failed" });
+    if (!capRes.success)
+      return res.status(400).json({ ok: false, msg: "Captcha failed" });
 
     const now = Date.now();
-    const count = await db.get(`SELECT COUNT(*) AS total FROM claims WHERE created_at >= ?`, [now - 60000]);
+    const count = await db.get(
+      `SELECT COUNT(*) AS total FROM claims WHERE created_at >= ?`,
+      [now - 60000]
+    );
     const position = count.total + 1;
 
     const r = await db.run(
@@ -128,11 +146,14 @@ app.post("/admin/open", requireAdmin, (req, res) => {
   openWindow = true;
   winnerSelected = false;
   windowExpiresAt = Date.now() + seconds * 1000;
+
   console.log(`🟢 Window open for ${seconds}s`);
+
   setTimeout(() => {
     openWindow = false;
     console.log("🔴 Window closed");
   }, seconds * 1000);
+
   res.json({ ok: true, opened_for: seconds });
 });
 
@@ -143,12 +164,11 @@ cron.schedule("0 0 * * *", async () => {
     openWindow = false;
     winnerSelected = false;
     windowExpiresAt = 0;
-
-    // Optionally mark previous day's claims as finalized
-    await db.run(`UPDATE claims SET paid = 1 WHERE is_winner = 1 AND paid = 0`);
+    lastResetDate = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
   } catch (err) {
     console.error("Midnight reset error:", err);
   }
 }, { timezone: "America/Los_Angeles" });
 
 app.listen(PORT, () => console.log(`🚀 Live on port ${PORT}`));
+
