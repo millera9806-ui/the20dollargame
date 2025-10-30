@@ -178,7 +178,7 @@
         const res = await fetch("/state");
         return await res.json();
       } catch {
-        return { openWindow: false, remaining: 0, recent: [] };
+        return { openWindow: false, remaining: 0, recent: [], isNewDay: false };
       }
     }
 
@@ -191,8 +191,17 @@
     }
 
     async function updateUI() {
-      const { openWindow, remaining } = await fetchState();
+      const { openWindow, remaining, isNewDay } = await fetchState();
 
+      // 🕓 NEW DAY MESSAGE
+      if (isNewDay && !openWindow) {
+        clockEl.classList.add("hidden");
+        formEl.classList.add("hidden");
+        statusEl.textContent = "Today's $20 hasn't been claimed yet — stay tuned!";
+        return;
+      }
+
+      // 🟢 ACTIVE WINDOW
       if (openWindow && remaining > 0) {
         const mins = String(Math.floor(remaining / 60)).padStart(2, "0");
         const secs = String(remaining % 60).padStart(2, "0");
@@ -200,7 +209,9 @@
         clockEl.classList.remove("hidden");
         if (!userResult) formEl.classList.remove("hidden");
         if (!userResult) statusEl.textContent = "Fingers crossed — waiting for results...";
-      } else {
+      }
+      // 🔴 CLOSED WINDOW (after win)
+      else {
         clockEl.classList.add("hidden");
         formEl.classList.add("hidden");
         if (userResult) {
@@ -230,9 +241,10 @@
       userResult = await res.json();
     });
 
-    setInterval(updateUI, 1000);
+    setInterval(updateUI, 2000);
     updateUI();
     loadTicker();
   </script>
 </body>
 </html>
+
