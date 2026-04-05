@@ -2,20 +2,21 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>The $20 Dollar Game</title>
 
   <meta name="description" content="The $20 Dollar Game — one winner every day. No gimmicks. Real cash." />
-  <link rel="icon" type="image/png" href="favicon.png" />
+  <link rel="icon" type="image/png" href="favicon.png"/>
 
   <style>
     body {
-      background: #fff;
-      color: #000;
-      font-family: "Helvetica Neue", Arial, sans-serif;
+      font-family: Arial, sans-serif;
       text-align: center;
       margin: 0;
+      background: #fff;
     }
+
+    h1 { font-size: 3em; margin-top: 60px; }
 
     .nav {
       position: absolute;
@@ -30,74 +31,49 @@
       font-weight: bold;
     }
 
-    h1 {
-      font-size: 3.5em;
-      font-weight: 800;
-      margin-top: 80px;
-    }
-
-    h2 {
-      font-size: 1.2em;
-      font-weight: 400;
-      margin-top: 10px;
-      margin-bottom: 30px;
-    }
-
-    .sponsor-title {
-      font-size: 1.5em;
-      font-weight: 700;
-      margin-top: 30px;
-      letter-spacing: 1px;
-    }
-
     .sponsor-box {
       width: 500px;
       height: 140px;
       background: black;
       color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       margin: 20px auto;
+      display:flex;
+      align-items:center;
+      justify-content:center;
       font-size: 2em;
-      font-weight: 600;
+    }
+
+    #status { font-size: 1.4em; margin-top: 20px; }
+    #clock { font-size: 2em; }
+
+    .game-container {
+      margin: 40px auto;
+      width: 600px;
+    }
+
+    canvas {
+      background: #111;
       border-radius: 8px;
     }
 
-    #status {
-      font-size: 1.5em;
-      margin-top: 25px;
+    #leaderboard {
+      margin-top: 15px;
+      font-size: 14px;
     }
 
-    #clock {
-      font-size: 2.5em;
-      margin-top: 10px;
-    }
-
-    /* GAME AREA */
-    .game-container {
-      margin-top: 40px;
-      width: 600px;
-      height: 300px;
-      border: 2px dashed #ccc;
-      margin-left: auto;
-      margin-right: auto;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #999;
-      font-size: 1.2em;
+    #leaderboard div {
+      margin: 2px 0;
     }
 
     #winner-ticker {
       background: #000;
       color: #fff;
-      overflow: hidden;
-      white-space: nowrap;
       position: fixed;
       bottom: 0;
       width: 100%;
       padding: 0.5em;
+      white-space: nowrap;
+      overflow: hidden;
     }
 
     #ticker-text {
@@ -110,13 +86,7 @@
       100% { transform: translateX(-100%); }
     }
 
-    footer {
-      font-size: 0.7em;
-      color: #777;
-      margin: 3em 0 4em 0;
-    }
-
-    .hidden { display: none; }
+    .hidden { display:none; }
   </style>
 
   <script async src="https://www.google.com/recaptcha/api.js"></script>
@@ -124,101 +94,197 @@
 
 <body>
 
-  <div class="nav">
-    <a href="faq.html">FAQ</a>
-    <a href="contact.html">Contact</a>
+<div class="nav">
+  <a href="faq.html">FAQ</a>
+  <a href="contact.html">Contact</a>
+</div>
+
+<h1>THE 20 DOLLAR GAME</h1>
+
+<div class="sponsor-box">YOUR LOGO HERE</div>
+
+<div id="status">Loading...</div>
+<div id="clock" class="hidden">01:00</div>
+
+<!-- GAME -->
+<div class="game-container">
+  <canvas id="game" width="600" height="400"></canvas>
+
+  <div id="leaderboard">
+    <strong>Global High Scores</strong>
+    <div id="scores"></div>
   </div>
+</div>
 
-  <h1>THE 20 DOLLAR GAME</h1>
+<!-- TICKER -->
+<div id="winner-ticker">
+  <span id="ticker-text">Loading winners...</span>
+</div>
 
-  <h2>
-    Visit each day for your chance to claim $20.<br>
-    One winner each day. No gimmicks. Real cash.
-  </h2>
+<script>
 
-  <!-- 🔥 SPONSOR -->
-  <div class="sponsor-title">
-    TODAYS GAME IS BROUGHT TO YOU BY:
-  </div>
+/* ------------------ GAME ------------------ */
 
-  <div class="sponsor-box">
-    YOUR LOGO HERE
-  </div>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-  <!-- STATUS -->
-  <div id="status">Loading game status...</div>
-  <div id="clock" class="hidden">01:00</div>
+let snake = [{x:10,y:10}];
+let dir = {x:1,y:0};
+let food = {x:15,y:15};
+let score = 0;
 
-  <!-- GAME AREA -->
-  <div class="game-container">
-    GAME COMING SOON
-  </div>
+function draw() {
+  ctx.fillStyle = "#111";
+  ctx.fillRect(0,0,600,400);
 
-  <!-- TICKER -->
-  <div id="winner-ticker">
-    <span id="ticker-text">Loading recent winners...</span>
-  </div>
+  // snake
+  ctx.fillStyle = "lime";
+  snake.forEach(s=>{
+    ctx.fillRect(s.x*20, s.y*20, 18, 18);
+  });
 
-  <footer>
-    © 2025 The $20 Dollar Game · No purchase necessary · Void where prohibited<br>
-    Support the game: <strong>$the20dollargame</strong>
-  </footer>
+  // $20 bill
+  ctx.fillStyle = "gold";
+  ctx.fillRect(food.x*20, food.y*20, 18, 18);
 
-  <script>
-    const quotes = [
-      "Try again tomorrow.",
-      "You're closer than you think.",
-      "Stay in the game.",
-      "Keep going.",
-      "Not today. Maybe tomorrow."
-    ];
+  ctx.fillStyle = "white";
+  ctx.fillText("$20", food.x*20, food.y*20+12);
 
-    const statusEl = document.getElementById("status");
-    const clockEl = document.getElementById("clock");
+  ctx.fillText("Score: "+score, 10, 20);
+}
 
-    async function fetchState() {
-      const res = await fetch("/state");
-      return await res.json();
+function update() {
+  const head = {
+    x: snake[0].x + dir.x,
+    y: snake[0].y + dir.y
+  };
+
+  head.x = (head.x+30)%30;
+  head.y = (head.y+20)%20;
+
+  snake.unshift(head);
+
+  if(head.x === food.x && head.y === food.y){
+    score++;
+    food = {
+      x: Math.floor(Math.random()*30),
+      y: Math.floor(Math.random()*20)
+    };
+  } else {
+    snake.pop();
+  }
+
+  // collision
+  for(let i=1;i<snake.length;i++){
+    if(head.x===snake[i].x && head.y===snake[i].y){
+      saveScore(score);
+      resetGame();
     }
+  }
+}
 
-    async function loadTicker() {
-      const { recent } = await fetchState();
-      const text = recent.length
-        ? "Recent winners: " + recent.map(x => x.payout_id).join(" • ")
-        : "No winners yet";
-      document.getElementById("ticker-text").textContent = text;
-    }
+function loop(){
+  update();
+  draw();
+}
+setInterval(loop,120);
 
-    async function updateUI() {
-      const { openWindow, remaining, isNewDay } = await fetchState();
+document.addEventListener("keydown", e=>{
+  if(e.key==="ArrowUp") dir={x:0,y:-1};
+  if(e.key==="ArrowDown") dir={x:0,y:1};
+  if(e.key==="ArrowLeft") dir={x:-1,y:0};
+  if(e.key==="ArrowRight") dir={x:1,y:0};
+});
 
-      if (isNewDay && !openWindow) {
-        statusEl.textContent = "Today's $20 hasn't been claimed yet — stay tuned!";
-        return;
-      }
+function resetGame(){
+  snake=[{x:10,y:10}];
+  dir={x:1,y:0};
+  score=0;
+}
 
-      if (openWindow && remaining > 0) {
-        const mins = Math.floor(remaining / 60);
-        const secs = remaining % 60;
+/* ------------------ GLOBAL LEADERBOARD ------------------ */
 
-        clockEl.textContent = `${mins}:${secs.toString().padStart(2,"0")}`;
-        clockEl.classList.remove("hidden");
+async function saveScore(score) {
+  if(score < 1) return;
 
-        statusEl.textContent = "Enter now — winner selected randomly.";
-      } else {
-        clockEl.classList.add("hidden");
+  await fetch("/score", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ score })
+  });
+}
 
-        const q = quotes[Math.floor(Math.random() * quotes.length)];
-        statusEl.textContent = q;
-      }
-    }
+async function loadScores() {
+  const res = await fetch("/scores");
+  const data = await res.json();
 
-    setInterval(updateUI, 2000);
-    setInterval(loadTicker, 5000);
+  const el = document.getElementById("scores");
+  el.innerHTML = data.map((s,i)=>`${i+1}. ${s.score}`).join("<br>");
+}
 
-    loadTicker();
-    updateUI();
-  </script>
+setInterval(loadScores, 3000);
+loadScores();
+
+/* ------------------ SITE LOGIC ------------------ */
+
+const statusEl = document.getElementById("status");
+const clockEl = document.getElementById("clock");
+
+const quotes = [
+  "Try again tomorrow.",
+  "Stay in the game.",
+  "You're closer than you think."
+];
+
+async function fetchState(){
+  const res = await fetch("/state");
+  return await res.json();
+}
+
+async function loadTicker(){
+  const { recent } = await fetchState();
+  const text = recent.length
+    ? "Recent winners: " + recent.map(x => x.payout_id).join(" • ")
+    : "No winners yet";
+  document.getElementById("ticker-text").textContent = text;
+}
+
+async function updateUI(){
+  const { openWindow, remaining, isNewDay, hasWinnerToday } = await fetchState();
+
+  if(isNewDay && !openWindow){
+    statusEl.textContent = "Today's $20 hasn't been claimed yet — stay tuned!";
+    return;
+  }
+
+  if(openWindow && remaining>0){
+    clockEl.classList.remove("hidden");
+
+    const m = Math.floor(remaining/60);
+    const s = remaining%60;
+    clockEl.textContent = `${m}:${s.toString().padStart(2,"0")}`;
+
+    statusEl.textContent = "Drop is live — go enter!";
+    return;
+  }
+
+  if(!openWindow && !hasWinnerToday){
+    statusEl.textContent = quotes[Math.floor(Math.random()*quotes.length)];
+    return;
+  }
+
+  if(hasWinnerToday){
+    statusEl.textContent = "Today's $20 has been claimed — come back tomorrow 6–9 PM PST.";
+  }
+}
+
+setInterval(updateUI,2000);
+setInterval(loadTicker,5000);
+
+loadTicker();
+updateUI();
+
+</script>
 
 </body>
 </html>

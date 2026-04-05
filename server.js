@@ -23,17 +23,13 @@ const DB_PATH = path.join(DB_DIR, "claims.db");
 app.use(cors());
 app.use(express.static(PUBLIC));
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
 
 if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR);
 
-// DB INIT
+// DB
 let db;
 await (async () => {
-  db = await sqlite.open({
-    filename: DB_PATH,
-    driver: sqlite3.Database
-  });
+  db = await sqlite.open({ filename: DB_PATH, driver: sqlite3.Database });
 
   await db.exec(`
     CREATE TABLE IF NOT EXISTS claims (
@@ -42,6 +38,12 @@ await (async () => {
       payout_id TEXT,
       created_at INTEGER,
       is_winner INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS scores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      score INTEGER,
+      created_at INTEGER
     );
   `);
 
@@ -52,12 +54,9 @@ await (async () => {
 let openWindow = false;
 let windowExpiresAt = 0;
 
-// PACIFIC TIME
 function pacificMidnight() {
   const now = new Date();
-  const pac = new Date(
-    now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })
-  );
+  const pac = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
   pac.setHours(0, 0, 0, 0);
   return pac.getTime();
 }
@@ -65,15 +64,11 @@ function pacificMidnight() {
 // CAPTCHA
 async function verifyCaptcha(token) {
   try {
-    const resp = await fetch(
-      "https://www.google.com/recaptcha/api/siteverify",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: `secret=${process.env.RECAPTCHA_SECRET}&response=${token}`
-      }
-    );
-
+    const resp = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `secret=${process.env.RECAPTCHA_SECRET}&response=${token}`
+    });
     return await resp.json();
   } catch {
     return { success: false };
@@ -83,7 +78,6 @@ async function verifyCaptcha(token) {
 // PICK WINNER
 async function pickWinner() {
   const now = Date.now();
-
   const entries = await db.all(
     `SELECT id FROM claims WHERE created_at >= ?`,
     [now - 60000]
@@ -92,22 +86,12 @@ async function pickWinner() {
   if (!entries.length) return;
 
   const winner = entries[Math.floor(Math.random() * entries.length)];
-
-  await db.run(
-    `UPDATE claims SET is_winner=1 WHERE id=?`,
-    winner.id
-  );
-
-  console.log("🏆 WINNER:", winner.id);
+  await db.run(`UPDATE claims SET is_winner=1 WHERE id=?`, winner.id);
 }
 
 // STATE
 app.get("/state", async (req, res) => {
-  const remaining = Math.max(
-    0,
-    Math.floor((windowExpiresAt - Date.now()) / 1000)
-  );
-
+  const remaining = Math.max(0, Math.floor((windowExpiresAt - Date.now()) / 1000));
   const todayStart = pacificMidnight();
 
   const claimsToday = await db.get(
@@ -115,70 +99,82 @@ app.get("/state", async (req, res) => {
     [todayStart]
   );
 
-  const isNewDay = claimsToday.c === 0;
+  const winnerToday = await db.get(
+    `SELECT COUNT(*) as w FROM claims WHERE is_winner=1 AND created_at >= ?`,
+    [todayStart]
+  );
 
   const recent = await db.all(
     `SELECT payout_id FROM claims WHERE is_winner=1 ORDER BY created_at DESC LIMIT 10`
   );
 
-  res.json({ openWindow, remaining, recent, isNewDay });
+  res.json({
+    openWindow,
+    remaining,
+    isNewDay: claimsToday.c === 0,
+    hasWinnerToday: winnerToday.w > 0,
+    recent
+  });
 });
 
 // CLAIM
 app.post("/claim", async (req, res) => {
-  try {
-    if (!openWindow) return res.json({ ok: false });
+  if (!openWindow) return res.json({ ok: false });
 
-    const { payout_method, payout_id, captcha } = req.body;
+  const { payout_method, payout_id, captcha } = req.body;
 
-    if (!payout_method || !payout_id) {
-      return res.json({ ok: false });
-    }
+  const cap = await verifyCaptcha(captcha);
+  if (!cap.success) return res.json({ ok: false });
 
-    const cap = await verifyCaptcha(captcha);
-    if (!cap.success) return res.json({ ok: false });
+  const now = Date.now();
 
-    const now = Date.now();
+  const existing = await db.get(
+    `SELECT id FROM claims WHERE created_at >= ? AND payout_id=?`,
+    [now - 60000, payout_id]
+  );
 
-    // prevent duplicate entry
-    const existing = await db.get(
-      `SELECT id FROM claims WHERE created_at >= ? AND payout_id=?`,
-      [now - 60000, payout_id]
-    );
+  if (existing) return res.json({ ok: false });
 
-    if (existing) {
-      return res.json({ ok: false, message: "Already entered" });
-    }
+  const count = await db.get(
+    `SELECT COUNT(*) as total FROM claims WHERE created_at >= ?`,
+    [now - 60000]
+  );
 
-    const count = await db.get(
-      `SELECT COUNT(*) as total FROM claims WHERE created_at >= ?`,
-      [now - 60000]
-    );
+  await db.run(
+    `INSERT INTO claims (payout_method, payout_id, created_at) VALUES (?,?,?)`,
+    [payout_method, payout_id, now]
+  );
 
-    const position = count.total + 1;
-
-    await db.run(
-      `INSERT INTO claims (payout_method, payout_id, created_at) VALUES (?,?,?)`,
-      [payout_method.trim(), payout_id.trim(), now]
-    );
-
-    res.json({ ok: true, position });
-
-  } catch {
-    res.json({ ok: false });
-  }
+  res.json({ ok: true, position: count.total + 1 });
 });
 
-// ADMIN
+// 🏆 SAVE SCORE
+app.post("/score", async (req, res) => {
+  const { score } = req.body;
+
+  if (!score || score < 1) return res.json({ ok: false });
+
+  await db.run(
+    `INSERT INTO scores (score, created_at) VALUES (?,?)`,
+    [score, Date.now()]
+  );
+
+  res.json({ ok: true });
+});
+
+// 🏆 GET TOP SCORES
+app.get("/scores", async (req, res) => {
+  const rows = await db.all(
+    `SELECT score FROM scores ORDER BY score DESC LIMIT 10`
+  );
+  res.json(rows);
+});
+
+// ADMIN OPEN
 function requireAdmin(req, res, next) {
   if (req.query.admin === process.env.ADMIN_PASSWORD) return next();
   res.status(401).send("unauthorized");
 }
-
-app.get("/admin/claims", requireAdmin, async (req, res) => {
-  const rows = await db.all(`SELECT * FROM claims ORDER BY created_at DESC LIMIT 100`);
-  res.json(rows);
-});
 
 app.post("/admin/open", requireAdmin, (req, res) => {
   openWindow = true;
@@ -209,6 +205,4 @@ cron.schedule("* * * * *", () => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log("🚀 running"));
