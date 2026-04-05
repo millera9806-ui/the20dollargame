@@ -1,8 +1,7 @@
-// server.js — Render-stable w/ calendar-day detection from DB (Pacific time)
 import express from "express";
 import bodyParser from "body-parser";
 import sqlite3 from "sqlite3";
-import * as sqlite from "sqlite"; // Node 25+
+import * as sqlite from "sqlite";
 import cron from "node-cron";
 import path, { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -10,12 +9,14 @@ import dotenv from "dotenv";
 import cors from "cors";
 import fetch from "node-fetch";
 import fs from "fs";
+import twilio from "twilio";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: resolve(__dirname, ".env") });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
 const PUBLIC = path.join(__dirname, "public");
 const DB_DIR = path.join(__dirname, "data");
 const DB_PATH = path.join(DB_DIR, "claims.db");
@@ -25,13 +26,16 @@ app.use(express.static(PUBLIC));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// ensure /data folder exists
 if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR);
 
-// --- DATABASE INIT ---
+// TWILIO
+const client = twilio(process.env.TWILIO_SID, process.env.TWILIO_AUTH);
+
+// DB
 let db;
-async function initDB() {
+await (async () => {
   db = await sqlite.open({ filename: DB_PATH, driver: sqlite3.Database });
+
   await db.exec(`
     CREATE TABLE IF NOT EXISTS claims (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,159 +44,165 @@ async function initDB() {
       created_at INTEGER,
       is_winner INTEGER DEFAULT 0
     );
-  `);
-  console.log("✅ Database ready");
-}
-await initDB();
 
-// --- GAME STATE ---
+    CREATE TABLE IF NOT EXISTS subscribers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      phone TEXT UNIQUE,
+      created_at INTEGER
+    );
+  `);
+})();
+
 let openWindow = false;
-let winnerSelected = false;
 let windowExpiresAt = 0;
 
-// --- CAPTCHA ---
-async function verifyCaptcha(token) {
-  const secret = process.env.RECAPTCHA_SECRET;
-  const resp = await fetch("https://www.google.com/recaptcha/api/siteverify", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `secret=${encodeURIComponent(secret)}&response=${encodeURIComponent(token)}`
-  });
-  return resp.json();
-}
-
-// --- ADMIN AUTH ---
-function requireAdmin(req, res, next) {
-  const key = req.query.admin || req.headers["x-admin-key"];
-  if (!process.env.ADMIN_PASSWORD) return res.status(500).send("ADMIN_PASSWORD not set");
-  if (key === process.env.ADMIN_PASSWORD) return next();
-  return res.status(401).send("unauthorized");
-}
-
-// --- helpers: get Pacific midnight epoch ---
-function pacificMidnightMs() {
+function pacificMidnight() {
   const now = new Date();
   const pac = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
   pac.setHours(0, 0, 0, 0);
   return pac.getTime();
 }
 
-// --- ROUTES ---
+// CAPTCHA
+async function verifyCaptcha(token) {
+  const resp = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `secret=${process.env.RECAPTCHA_SECRET}&response=${token}`
+  });
+  return resp.json();
+}
+
+// SMS
+async function sendSMSBlast() {
+  const users = await db.all(`SELECT phone FROM subscribers`);
+  for (const u of users) {
+    try {
+      await client.messages.create({
+        body: "🚨 $20 DROP IS LIVE — GO NOW: https://yourdomain.com",
+        from: process.env.TWILIO_PHONE,
+        to: u.phone
+      });
+    } catch {}
+  }
+}
+
+// RANDOM WINNER
+async function pickWinner() {
+  const now = Date.now();
+  const entries = await db.all(`SELECT id FROM claims WHERE created_at >= ?`, [now - 60000]);
+  if (!entries.length) return;
+
+  const winner = entries[Math.floor(Math.random() * entries.length)];
+  await db.run(`UPDATE claims SET is_winner=1 WHERE id=?`, winner.id);
+}
+
+// STATE
 app.get("/state", async (req, res) => {
-  try {
-    const remaining = Math.max(0, Math.floor((windowExpiresAt - Date.now()) / 1000));
+  const remaining = Math.max(0, Math.floor((windowExpiresAt - Date.now()) / 1000));
+  const todayStart = pacificMidnight();
 
-    const todayStart = pacificMidnightMs();
+  const claimsToday = await db.get(
+    `SELECT COUNT(*) as c FROM claims WHERE created_at >= ?`,
+    [todayStart]
+  );
 
-    // any claims today?
-    const anyToday = await db.get(
-      `SELECT COUNT(*) AS c FROM claims WHERE created_at >= ?`,
-      [todayStart]
-    );
-    const hasAnyToday = (anyToday?.c || 0) > 0;
+  const isNewDay = claimsToday.c === 0;
 
-    // winner today?
-    const winToday = await db.get(
-      `SELECT COUNT(*) AS w FROM claims WHERE is_winner=1 AND created_at >= ?`,
-      [todayStart]
-    );
-    const hasWinnerToday = (winToday?.w || 0) > 0;
+  const recent = await db.all(
+    `SELECT payout_id FROM claims WHERE is_winner=1 ORDER BY created_at DESC LIMIT 10`
+  );
 
-    // recent winners (ticker)
-    const recent = await db.all(
-      `SELECT payout_id FROM claims WHERE is_winner=1 ORDER BY created_at DESC LIMIT 10`
-    );
-
-    // isNewDay = no claims yet today (pre-open state)
-    const isNewDay = !hasAnyToday;
-
-    res.json({ openWindow, remaining, recent, isNewDay, hasWinnerToday });
-  } catch (err) {
-    console.error("State error:", err);
-    res.status(500).json({ ok: false, msg: "Server error" });
-  }
+  res.json({ openWindow, remaining, recent, isNewDay });
 });
 
+// CLAIM
 app.post("/claim", async (req, res) => {
+  if (!openWindow) return res.json({ ok: false });
+
+  const { payout_method, payout_id, captcha } = req.body;
+  const cap = await verifyCaptcha(captcha);
+  if (!cap.success) return res.json({ ok: false });
+
+  const now = Date.now();
+
+  const count = await db.get(
+    `SELECT COUNT(*) as total FROM claims WHERE created_at >= ?`,
+    [now - 60000]
+  );
+
+  const position = count.total + 1;
+
+  await db.run(
+    `INSERT INTO claims (payout_method, payout_id, created_at) VALUES (?,?,?)`,
+    [payout_method, payout_id, now]
+  );
+
+  res.json({ ok: true, position });
+});
+
+// SMS SUBSCRIBE (500 cap)
+app.post("/subscribe-sms", async (req, res) => {
+  const { phone } = req.body;
+  const count = await db.get(`SELECT COUNT(*) as c FROM subscribers`);
+
+  if (count.c >= 500) {
+    return res.json({ ok: false, message: "SMS list full (500 max)" });
+  }
+
   try {
-    if (!openWindow) return res.status(400).json({ ok: false, msg: "Window closed" });
-
-    const { payout_method, payout_id, captcha } = req.body;
-    if (!payout_method || !payout_id)
-      return res.status(400).json({ ok: false, msg: "Missing fields" });
-
-    const capRes = await verifyCaptcha(captcha);
-    if (!capRes.success)
-      return res.status(400).json({ ok: false, msg: "Captcha failed" });
-
-    const now = Date.now();
-
-    // position among claims in the last 60s (window)
-    const count = await db.get(
-      `SELECT COUNT(*) AS total FROM claims WHERE created_at >= ?`,
-      [now - 60000]
+    await db.run(
+      `INSERT INTO subscribers (phone, created_at) VALUES (?,?)`,
+      [phone, Date.now()]
     );
-    const position = (count?.total || 0) + 1;
-
-    const r = await db.run(
-      `INSERT INTO claims (payout_method, payout_id, created_at) VALUES (?,?,?)`,
-      [payout_method.trim(), payout_id.trim(), now]
-    );
-    const claimId = r.lastID;
-
-    let winner = false;
-    if (!winnerSelected) {
-      winnerSelected = true;
-      await db.run(`UPDATE claims SET is_winner=1 WHERE id=?`, claimId);
-      winner = true;
-      console.log(`🎉 Winner: claim ${claimId} (${payout_id})`);
-    }
-
-    res.json({ ok: true, winner, position });
-  } catch (err) {
-    console.error("Claim error:", err);
-    res.status(500).json({ ok: false, msg: "Server error" });
+    res.json({ ok: true });
+  } catch {
+    res.json({ ok: false, message: "Already subscribed" });
   }
 });
 
-// --- ADMIN VIEW CLAIMS ---
+// ADMIN
+function requireAdmin(req, res, next) {
+  if (req.query.admin === process.env.ADMIN_PASSWORD) return next();
+  res.status(401).send("unauthorized");
+}
+
 app.get("/admin/claims", requireAdmin, async (req, res) => {
-  try {
-    const rows = await db.all(`SELECT * FROM claims ORDER BY created_at DESC LIMIT 100`);
-    res.json(rows);
-  } catch (err) {
-    console.error("Admin fetch error:", err);
-    res.status(500).json({ ok: false, msg: "Server error" });
-  }
+  const rows = await db.all(`SELECT * FROM claims ORDER BY created_at DESC LIMIT 100`);
+  res.json(rows);
 });
 
-// --- ADMIN OPEN WINDOW ---
 app.post("/admin/open", requireAdmin, (req, res) => {
-  const seconds = parseInt(req.query.seconds || "60", 10);
   openWindow = true;
-  winnerSelected = false;
-  windowExpiresAt = Date.now() + seconds * 1000;
+  windowExpiresAt = Date.now() + 60000;
 
-  console.log(`🟢 Window open for ${seconds}s`);
+  sendSMSBlast();
 
-  setTimeout(() => {
+  setTimeout(async () => {
     openWindow = false;
-    console.log("🔴 Window closed");
-  }, seconds * 1000);
+    await pickWinner();
+  }, 60000);
 
-  res.json({ ok: true, opened_for: seconds });
+  res.json({ ok: true });
 });
 
-// --- DAILY RESET AT MIDNIGHT (Pacific) ---
-cron.schedule("0 0 * * *", async () => {
-  try {
-    console.log("🌙 Midnight reset (Pacific) triggered");
-    openWindow = false;
-    winnerSelected = false;
-    windowExpiresAt = 0;
-  } catch (err) {
-    console.error("Midnight reset error:", err);
-  }
-}, { timezone: "America/Los_Angeles" });
+// AUTO DROP (6–9 PST)
+cron.schedule("* * * * *", () => {
+  const hour = new Date().getHours();
 
-app.listen(PORT, () => console.log(`🚀 Live on port ${PORT}`));
+  if (hour >= 18 && hour < 21 && !openWindow) {
+    if (Math.random() < 0.05) {
+      openWindow = true;
+      windowExpiresAt = Date.now() + 60000;
+
+      sendSMSBlast();
+
+      setTimeout(async () => {
+        openWindow = false;
+        await pickWinner();
+      }, 60000);
+    }
+  }
+});
+
+app.listen(PORT);
