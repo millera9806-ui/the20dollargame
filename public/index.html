@@ -1,239 +1,249 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>The $20 Dollar Game</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The $20 Dollar Game</title>
 
-<link rel="icon" type="image/png" href="favicon.png"/>
+  <!-- 🧠 SEO + Social Meta -->
+  <meta name="description" content="The $20 Dollar Game — one winner every day. No gimmicks. Real cash. Just be fast." />
+  <meta name="keywords" content="$20 game, daily giveaway, win money, cash app, venmo, paypal, free cash, daily contest" />
+  <meta property="og:title" content="The $20 Dollar Game" />
+  <meta property="og:description" content="One winner every day. No gimmicks. Real cash." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://www.the20dollargame.com" />
+  <meta property="og:image" content="https://www.the20dollargame.com/favicon.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="The $20 Dollar Game" />
+  <meta name="twitter:description" content="One winner every day. No gimmicks. Real cash." />
 
-<style>
-body {
-  font-family: Arial, sans-serif;
-  text-align: center;
-  margin: 0;
-  background: #fff;
-}
+  <!-- 💰 Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png" />
 
-h1 { font-size: 3em; margin-top: 60px; }
+  <style>
+    body {
+      background: #fff;
+      color: #000;
+      font-family: "Helvetica Neue", Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+    }
 
-.sponsor-box {
-  width: 500px;
-  height: 140px;
-  background: black;
-  color: white;
-  margin: 20px auto;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-size: 2em;
-}
+    .nav {
+      position: absolute;
+      top: 15px;
+      right: 25px;
+    }
 
-#status { font-size: 1.4em; margin-top: 20px; }
-#clock { font-size: 2em; }
+    .nav a {
+      color: black;
+      text-decoration: none;
+      margin-left: 20px;
+      font-weight: bold;
+    }
 
-form { margin-top: 15px; }
+    h1 {
+      font-size: 3em;
+      font-weight: 800;
+      margin-top: 12%;
+      margin-bottom: 0.3em;
+    }
 
-.game-container {
-  margin: 40px auto;
-  width: 600px;
-}
+    h2 {
+      font-size: 1.2em;
+      font-weight: 400;
+      margin: 1em 0 2em 0;
+    }
 
-canvas {
-  background: #111;
-  border-radius: 8px;
-}
+    #clock {
+      font-size: 3em;
+      font-weight: 700;
+      margin-top: 1em;
+    }
 
-.hidden { display:none; }
-</style>
+    #status {
+      font-size: 1.3em;
+      font-weight: 500;
+      margin-top: 0.5em;
+    }
+
+    select,
+    input,
+    button {
+      padding: 10px;
+      font-size: 1em;
+      margin: 8px;
+      width: 250px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+
+    button {
+      background-color: #2ecc71;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    button:hover {
+      background-color: #27ae60;
+    }
+
+    .g-recaptcha {
+      display: flex;
+      justify-content: center;
+      margin: 10px 0 15px 0;
+    }
+
+    #winner-ticker {
+      background: #000;
+      color: #fff;
+      overflow: hidden;
+      white-space: nowrap;
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+      padding: 0.5em;
+    }
+
+    #ticker-text {
+      display: inline-block;
+      animation: scrollText 25s linear infinite;
+    }
+
+    @keyframes scrollText {
+      0% { transform: translateX(100%); }
+      100% { transform: translateX(-100%); }
+    }
+
+    footer {
+      font-size: 0.7em;
+      color: #777;
+      margin: 3em 0 4em 0;
+      line-height: 1.4em;
+    }
+
+    .hidden { display: none; }
+  </style>
+
+  <script async src="https://www.google.com/recaptcha/api.js"></script>
 </head>
 
 <body>
+  <!-- top-right nav -->
+  <div class="nav">
+    <a href="faq.html">FAQ</a>
+    <a href="contact.html">Contact</a>
+  </div>
 
-<h1>THE 20 DOLLAR GAME</h1>
+  <h1>The $20 Dollar Game</h1>
+  <h2>Visit each day for your chance to claim $20.<br>One winner each day. No gimmicks. Real cash.</h2>
 
-<div class="sponsor-box">YOUR LOGO HERE</div>
+  <div id="clock" class="hidden">01:00</div>
+  <div id="status">Loading game status...</div>
 
-<div id="status">Loading...</div>
-<div id="clock" class="hidden">01:00</div>
+  <form id="claim-form" class="hidden">
+    <select id="method" required>
+      <option value="">Select payout method</option>
+      <option value="Venmo">Venmo</option>
+      <option value="PayPal">PayPal</option>
+      <option value="CashApp">CashApp</option>
+    </select>
+    <input id="handle" type="text" placeholder="@handle / email / $cashtag" required />
+    <div class="g-recaptcha" data-sitekey="6LeKj_crAAAAAHt5YPYgUc3DSzTyVlkNdFKyk-3Z"></div>
+    <button type="submit">Gimme that $20</button>
+  </form>
 
-<form id="claim-form" class="hidden">
-  <select id="method">
-    <option value="">Select payout</option>
-    <option>Venmo</option>
-    <option>PayPal</option>
-    <option>CashApp</option>
-  </select>
+  <div id="winner-ticker">
+    <span id="ticker-text">Loading recent winners...</span>
+  </div>
 
-  <input id="handle" placeholder="@handle" />
+  <footer>
+    © 2025 The $20 Dollar Game · No purchase necessary · Void where prohibited<br>
+    Support the game: <strong>$the20dollargame</strong> | the20dollargame@gmail.com
+  </footer>
 
-  <button type="submit">Gimme that $20</button>
-</form>
+  <script>
+    const clockEl = document.getElementById("clock");
+    const statusEl = document.getElementById("status");
+    const formEl = document.getElementById("claim-form");
+    let userResult = null;
 
-<div id="gameWrapper" class="game-container">
-  <canvas id="game" width="600" height="400"></canvas>
-</div>
-
-<script>
-
-/* ---------------- QUOTES ---------------- */
-
-const quotes = [
-"Success is not final, failure is not fatal: it is the courage to continue that counts. — Winston Churchill",
-"Our greatest glory is not in never failing, but in rising every time we fall. — Confucius",
-"It does not matter how slowly you go as long as you do not stop. — Confucius",
-"Failure is simply the opportunity to begin again, this time more intelligently. — Henry Ford",
-"I have not failed. I've just found 10,000 ways that won't work. — Thomas Edison",
-"Only those who dare to fail greatly can ever achieve greatly. — Robert F. Kennedy",
-"Fall seven times, stand up eight. — Japanese Proverb",
-"You may encounter many defeats, but you must not be defeated. — Maya Angelou",
-"It always seems impossible until it’s done. — Nelson Mandela",
-"Try again. Fail again. Fail better. — Samuel Beckett",
-"Do not be embarrassed by your failures, learn from them and start again. — Richard Branson",
-"Failure is success in progress. — Albert Einstein",
-"Success usually comes to those who are too busy to be looking for it. — Henry David Thoreau",
-"A person who never made a mistake never tried anything new. — Albert Einstein",
-"Perseverance is failing 19 times and succeeding the 20th. — Julie Andrews",
-"The secret of life is to fall seven times and to get up eight times. — Paulo Coelho",
-"Courage doesn’t always roar. Sometimes courage is the quiet voice… I will try again tomorrow. — Mary Anne Radmacher",
-"Energy and persistence conquer all things. — Benjamin Franklin",
-"What defines us is how well we rise after falling. — Lionel Messi",
-"You just can’t beat the person who never gives up. — Babe Ruth",
-"Many of life’s failures are people who did not realize how close they were to success when they gave up. — Thomas Edison",
-"Keep going. Everything you need will come to you at the perfect time. — Napoleon Hill",
-"Winners are not afraid of losing. But losers are. Failure is part of the process of success. — Robert Kiyosaki",
-"Act as if what you do makes a difference. It does. — William James",
-"Don’t watch the clock; do what it does. Keep going. — Sam Levenson"
-];
-
-/* ---------------- GAME ---------------- */
-
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-
-let snake=[{x:10,y:10}];
-let dir={x:1,y:0};
-let food={x:15,y:15};
-
-function draw(){
-  ctx.fillStyle="#111";
-  ctx.fillRect(0,0,600,400);
-
-  ctx.fillStyle="lime";
-  snake.forEach(s=>ctx.fillRect(s.x*20,s.y*20,18,18));
-
-  ctx.fillStyle="gold";
-  ctx.fillRect(food.x*20,food.y*20,18,18);
-}
-
-function update(){
-  const head={x:snake[0].x+dir.x,y:snake[0].y+dir.y};
-  head.x=(head.x+30)%30;
-  head.y=(head.y+20)%20;
-
-  snake.unshift(head);
-
-  if(head.x===food.x && head.y===food.y){
-    food={x:Math.random()*30|0,y:Math.random()*20|0};
-  } else {
-    snake.pop();
-  }
-}
-
-setInterval(()=>{update();draw();},120);
-
-document.addEventListener("keydown",e=>{
-  if(e.key==="ArrowUp")dir={x:0,y:-1};
-  if(e.key==="ArrowDown")dir={x:0,y:1};
-  if(e.key==="ArrowLeft")dir={x:-1,y:0};
-  if(e.key==="ArrowRight")dir={x:1,y:0};
-});
-
-/* ---------------- SITE ---------------- */
-
-const statusEl = document.getElementById("status");
-const clockEl = document.getElementById("clock");
-const formEl = document.getElementById("claim-form");
-const gameEl = document.getElementById("gameWrapper");
-
-let userResult = null;
-
-async function fetchState(){
-  const res = await fetch("/state");
-  return await res.json();
-}
-
-async function updateUI(){
-  const { openWindow, remaining, isNewDay, hasWinnerToday } = await fetchState();
-
-  // BEFORE DROP
-  if(isNewDay && !openWindow){
-    formEl.classList.add("hidden");
-    gameEl.classList.remove("hidden");
-    statusEl.textContent="Today's $20 hasn't been claimed yet — stay tuned!";
-    return;
-  }
-
-  // DROP LIVE
-  if(openWindow && remaining>0){
-    const m=Math.floor(remaining/60);
-    const s=remaining%60;
-
-    clockEl.textContent=`${m}:${s.toString().padStart(2,"0")}`;
-    clockEl.classList.remove("hidden");
-
-    formEl.classList.remove("hidden");
-    gameEl.classList.add("hidden");
-
-    statusEl.textContent="ENTER NOW";
-    return;
-  }
-
-  // AFTER ENTRY
-  if(userResult && !openWindow){
-    formEl.classList.add("hidden");
-    gameEl.classList.remove("hidden");
-
-    if(userResult.winner){
-      statusEl.textContent = "You've won! Please allow 5 minutes for payment to process. Have a problem? Email support at: the20dollargamesupport@gmail.com";
-    } else {
-      const q = quotes[Math.floor(Math.random()*quotes.length)];
-      statusEl.textContent = q;
+    async function fetchState() {
+      try {
+        const res = await fetch("/state");
+        return await res.json();
+      } catch {
+        return { openWindow: false, remaining: 0, recent: [], isNewDay: false };
+      }
     }
-    return;
-  }
 
-  // FINAL STATE
-  if(hasWinnerToday){
-    formEl.classList.add("hidden");
-    gameEl.classList.remove("hidden");
+    async function loadTicker() {
+      const { recent } = await fetchState();
+      const text = recent.length
+        ? "Recent Winners: " + recent.map(r => r.payout_id).join(" • ")
+        : "No winners yet — be the first!";
+      document.getElementById("ticker-text").textContent = text;
+    }
 
-    statusEl.textContent="Today's $20 has been claimed — come back tomorrow between 6–9 PM PST.";
-  }
-}
+    async function updateUI() {
+      const { openWindow, remaining, isNewDay } = await fetchState();
 
-/* CLAIM */
+      // 🕓 NEW DAY MESSAGE
+      if (isNewDay && !openWindow) {
+        clockEl.classList.add("hidden");
+        formEl.classList.add("hidden");
+        statusEl.textContent = "Today's $20 hasn't been claimed yet — stay tuned!";
+        return;
+      }
 
-formEl.addEventListener("submit", async e=>{
-  e.preventDefault();
+      // 🟢 ACTIVE WINDOW
+      if (openWindow && remaining > 0) {
+        const mins = String(Math.floor(remaining / 60)).padStart(2, "0");
+        const secs = String(remaining % 60).padStart(2, "0");
+        clockEl.textContent = `${mins}:${secs}`;
+        clockEl.classList.remove("hidden");
+        if (!userResult) formEl.classList.remove("hidden");
+        if (!userResult) statusEl.textContent = "Fingers crossed — waiting for results...";
+      }
+      // 🔴 CLOSED WINDOW (after win)
+      else {
+        clockEl.classList.add("hidden");
+        formEl.classList.add("hidden");
+        if (userResult) {
+          statusEl.textContent = userResult.winner
+            ? "🎉 You won! Admin will confirm payout soon."
+            : `Better luck next time — you were #${userResult.position}.`;
+        } else {
+          statusEl.textContent = "Today's $20 has been claimed — try your luck again tomorrow!";
+        }
+      }
+    }
 
-  const res=await fetch("/claim",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      payout_method:method.value,
-      payout_id:handle.value,
-      captcha:"test"
-    })
-  });
+    formEl.addEventListener("submit", async e => {
+      e.preventDefault();
+      const method = document.getElementById("method").value;
+      const handle = document.getElementById("handle").value;
+      const captcha = grecaptcha.getResponse();
 
-  userResult=await res.json();
-});
+      formEl.classList.add("hidden");
+      statusEl.textContent = "Fingers crossed — waiting for results...";
 
-setInterval(updateUI,2000);
-updateUI();
+      const res = await fetch("/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payout_method: method, payout_id: handle, captcha })
+      });
+      userResult = await res.json();
+    });
 
-</script>
-
+    setInterval(updateUI, 2000);
+    updateUI();
+    loadTicker();
+  </script>
 </body>
 </html>
