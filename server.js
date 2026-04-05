@@ -9,7 +9,6 @@ import dotenv from "dotenv";
 import cors from "cors";
 import fetch from "node-fetch";
 import fs from "fs";
-import twilio from "twilio";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: resolve(__dirname, ".env") });
@@ -28,12 +27,6 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR);
 
-// TWILIO
-const client = twilio(
-  process.env.TWILIO_SID,
-  process.env.TWILIO_AUTH
-);
-
 // DB INIT
 let db;
 await (async () => {
@@ -49,12 +42,6 @@ await (async () => {
       payout_id TEXT,
       created_at INTEGER,
       is_winner INTEGER DEFAULT 0
-    );
-
-    CREATE TABLE IF NOT EXISTS subscribers (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      phone TEXT UNIQUE,
-      created_at INTEGER
     );
   `);
 
@@ -82,9 +69,7 @@ async function verifyCaptcha(token) {
       "https://www.google.com/recaptcha/api/siteverify",
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: `secret=${process.env.RECAPTCHA_SECRET}&response=${token}`
       }
     );
@@ -92,28 +77,6 @@ async function verifyCaptcha(token) {
     return await resp.json();
   } catch {
     return { success: false };
-  }
-}
-
-// SMS BLAST
-async function sendSMSBlast() {
-  const users = await db.all(`SELECT phone FROM subscribers`);
-
-  console.log("📱 USERS:", users);
-
-  for (const u of users) {
-    try {
-      await client.messages.create({
-        body: "🚨 $20 DROP IS LIVE — GO NOW",
-        from: process.env.TWILIO_PHONE,
-        to: u.phone
-      });
-
-      console.log("sent to:", u.phone);
-
-    } catch (err) {
-      console.log("sms error:", u.phone, err.message);
-    }
   }
 }
 
@@ -126,10 +89,7 @@ async function pickWinner() {
     [now - 60000]
   );
 
-  if (!entries.length) {
-    console.log("no entries");
-    return;
-  }
+  if (!entries.length) return;
 
   const winner = entries[Math.floor(Math.random() * entries.length)];
 
@@ -138,7 +98,7 @@ async function pickWinner() {
     winner.id
   );
 
-  console.log("🏆 WINNER ID:", winner.id);
+  console.log("🏆 WINNER:", winner.id);
 }
 
 // STATE
@@ -161,15 +121,10 @@ app.get("/state", async (req, res) => {
     `SELECT payout_id FROM claims WHERE is_winner=1 ORDER BY created_at DESC LIMIT 10`
   );
 
-  res.json({
-    openWindow,
-    remaining,
-    recent,
-    isNewDay
-  });
+  res.json({ openWindow, remaining, recent, isNewDay });
 });
 
-// CLAIM (ANTI-SPAM + FIXED)
+// CLAIM
 app.post("/claim", async (req, res) => {
   try {
     if (!openWindow) return res.json({ ok: false });
@@ -185,7 +140,7 @@ app.post("/claim", async (req, res) => {
 
     const now = Date.now();
 
-    // 🔥 ANTI-SPAM
+    // prevent duplicate entry
     const existing = await db.get(
       `SELECT id FROM claims WHERE created_at >= ? AND payout_id=?`,
       [now - 60000, payout_id]
@@ -209,79 +164,29 @@ app.post("/claim", async (req, res) => {
 
     res.json({ ok: true, position });
 
-  } catch (err) {
-    console.log("claim error:", err);
-    res.status(500).json({ ok: false });
-  }
-});
-
-// SMS SUBSCRIBE (WITH CONFIRM TEXT)
-app.post("/subscribe-sms", async (req, res) => {
-  try {
-    const { phone } = req.body;
-
-    const count = await db.get(
-      `SELECT COUNT(*) as c FROM subscribers`
-    );
-
-    if (count.c >= 500) {
-      return res.json({
-        ok: false,
-        message: "SMS list full (500 max)"
-      });
-    }
-
-    await db.run(
-      `INSERT INTO subscribers (phone, created_at) VALUES (?,?)`,
-      [phone, Date.now()]
-    );
-
-    // CONFIRM TEXT
-    try {
-      await client.messages.create({
-        body: "✅ You're signed up! You'll get notified when the $20 drop goes live.",
-        from: process.env.TWILIO_PHONE,
-        to: phone
-      });
-    } catch (err) {
-      console.log("confirm sms fail:", phone);
-    }
-
-    res.json({ ok: true });
-
   } catch {
-    res.json({
-      ok: false,
-      message: "Already subscribed"
-    });
+    res.json({ ok: false });
   }
 });
 
-// ADMIN AUTH
+// ADMIN
 function requireAdmin(req, res, next) {
   if (req.query.admin === process.env.ADMIN_PASSWORD) return next();
   res.status(401).send("unauthorized");
 }
 
 app.get("/admin/claims", requireAdmin, async (req, res) => {
-  const rows = await db.all(
-    `SELECT * FROM claims ORDER BY created_at DESC LIMIT 100`
-  );
+  const rows = await db.all(`SELECT * FROM claims ORDER BY created_at DESC LIMIT 100`);
   res.json(rows);
 });
 
 app.post("/admin/open", requireAdmin, (req, res) => {
-  console.log("🟢 ADMIN OPEN WINDOW");
-
   openWindow = true;
   windowExpiresAt = Date.now() + 60000;
-
-  sendSMSBlast();
 
   setTimeout(async () => {
     openWindow = false;
     await pickWinner();
-    console.log("🔴 WINDOW CLOSED");
   }, 60000);
 
   res.json({ ok: true });
@@ -293,12 +198,8 @@ cron.schedule("* * * * *", () => {
 
   if (hour >= 18 && hour < 21 && !openWindow) {
     if (Math.random() < 0.05) {
-      console.log("🎯 AUTO DROP");
-
       openWindow = true;
       windowExpiresAt = Date.now() + 60000;
-
-      sendSMSBlast();
 
       setTimeout(async () => {
         openWindow = false;

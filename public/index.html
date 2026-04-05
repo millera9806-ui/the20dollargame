@@ -87,7 +87,6 @@
       margin: 10px 0 15px 0;
     }
 
-    /* TICKER */
     #winner-ticker {
       background: #000;
       color: #fff;
@@ -131,7 +130,6 @@
 
   <h1>The $20 Dollar Game</h1>
 
-  <!-- 🔥 SPONSOR -->
   <p style="margin-top:10px; font-size:14px;">
     Today's game is brought to you by: <b>Coming Soon</b>
   </p>
@@ -159,23 +157,6 @@
     <button type="submit">Gimme that $20</button>
   </form>
 
-  <!-- 🔥 SMS SECTION (LOWER, CLEAN) -->
-  <div style="margin-top:100px; margin-bottom:60px;">
-    <hr style="width:200px; margin:40px auto; opacity:0.2;">
-
-    <p id="subText"></p>
-
-    <input id="phone" placeholder="+14155551234" style="width:300px;" />
-    <br>
-
-    <button onclick="subscribeSMS()">Notify Me</button>
-
-    <p style="font-size:12px; color:#777;">
-      SMS alerts limited to first 500 users
-    </p>
-  </div>
-
-  <!-- 🔥 TICKER -->
   <div id="winner-ticker">
     <span id="ticker-text">Loading recent winners...</span>
   </div>
@@ -186,6 +167,34 @@
   </footer>
 
   <script>
+    const quotes = [
+      "Success is not final, failure is not fatal: it is the courage to continue that counts.",
+      "Our greatest glory is not in never failing, but in rising every time we fall.",
+      "It does not matter how slowly you go as long as you do not stop.",
+      "Failure is simply the opportunity to begin again, this time more intelligently.",
+      "I have not failed. I've just found 10,000 ways that won't work.",
+      "Only those who dare to fail greatly can ever achieve greatly.",
+      "Fall seven times, stand up eight.",
+      "You may encounter many defeats, but you must not be defeated.",
+      "It always seems impossible until it’s done.",
+      "Try again. Fail again. Fail better.",
+      "Do not be embarrassed by your failures, learn from them and start again.",
+      "Failure is success in progress.",
+      "Success usually comes to those who are too busy to be looking for it.",
+      "A person who never made a mistake never tried anything new.",
+      "Perseverance is failing 19 times and succeeding the 20th.",
+      "The secret of life is to fall seven times and to get up eight times.",
+      "Courage doesn’t always roar. Sometimes courage is the quiet voice… I will try again tomorrow.",
+      "Energy and persistence conquer all things.",
+      "What defines us is how well we rise after falling.",
+      "You just can’t beat the person who never gives up.",
+      "Many of life’s failures are people who did not realize how close they were to success when they gave up.",
+      "Keep going. Everything you need will come to you at the perfect time.",
+      "Winners are not afraid of losing. But losers are.",
+      "Act as if what you do makes a difference. It does.",
+      "Don’t watch the clock; do what it does. Keep going."
+    ];
+
     const clockEl = document.getElementById("clock");
     const statusEl = document.getElementById("status");
     const formEl = document.getElementById("claim-form");
@@ -231,7 +240,8 @@
         if (userResult) {
           statusEl.textContent = `You're in — ${userResult.position} players entered. Good luck.`;
         } else {
-          statusEl.textContent = "Waiting for today's drop...";
+          const q = quotes[Math.floor(Math.random() * quotes.length)];
+          statusEl.textContent = q;
         }
       }
     }
@@ -252,34 +262,9 @@
       userResult = await res.json();
     });
 
-    async function subscribeSMS() {
-      const phone = document.getElementById("phone").value;
-
-      const res = await fetch("/subscribe-sms", {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ phone })
-      });
-
-      const data = await res.json();
-
-      alert(data.ok ? "You're in — you'll get a text." : data.message);
-
-      loadSubs();
-    }
-
-    async function loadSubs() {
-      const r = await fetch("/subscribers/count");
-      const d = await r.json();
-
-      document.getElementById("subText").textContent =
-        `Join ${d.count} people getting notified instantly`;
-    }
-
     setInterval(updateUI, 2000);
     setInterval(loadTicker, 5000);
 
-    loadSubs();
     loadTicker();
     updateUI();
   </script>
