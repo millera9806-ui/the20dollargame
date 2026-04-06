@@ -20,11 +20,11 @@ const DB_DIR = path.join(__dirname, "data");
 const DB_PATH = path.join(DB_DIR, "claims.db");
 const CHAT_FETCH_LIMIT = 60;
 const CHAT_MAX_MESSAGE_LENGTH = 120;
-const CHAT_MAX_NICKNAME_LENGTH = 16;
 const CHAT_SLOW_MODE_MS = 8000;
 const CHAT_MAX_POSTS_PER_MINUTE = 6;
 const CHAT_MESSAGE_RETENTION_MS = 24 * 60 * 60 * 1000;
 const CHAT_STALE_RATE_LIMIT_MS = 10 * 60 * 1000;
+const DEFAULT_CHAT_NICKNAME = "potential winner";
 const BLOCKED_CHAT_TERMS = [
   "fuck",
   "shit",
@@ -113,6 +113,11 @@ async function initDB() {
     ON chat_messages(created_at DESC)
   `);
 
+  await db.run("UPDATE chat_messages SET nickname = ? WHERE nickname <> ?", [
+    DEFAULT_CHAT_NICKNAME,
+    DEFAULT_CHAT_NICKNAME
+  ]);
+
   await db.run(
     `
       UPDATE claims
@@ -167,17 +172,6 @@ function normalizeIp(ipAddress) {
 
 function getClientIp(req) {
   return normalizeIp(req.ip || req.socket?.remoteAddress || "");
-}
-
-function sanitizeChatNickname(value) {
-  const cleaned = String(value || "")
-    .normalize("NFKC")
-    .replace(/\s+/g, " ")
-    .replace(/[^A-Za-z0-9 _-]/g, "")
-    .trim()
-    .slice(0, CHAT_MAX_NICKNAME_LENGTH);
-
-  return cleaned || `Guest${Math.floor(Math.random() * 9000) + 1000}`;
 }
 
 function sanitizeChatMessage(value) {
@@ -493,7 +487,7 @@ app.post("/chat/messages", async (req, res) => {
       return res.status(400).json({ ok: false, msg: "Could not verify your network address" });
     }
 
-    const nickname = sanitizeChatNickname(req.body.nickname);
+    const nickname = DEFAULT_CHAT_NICKNAME;
     const message = sanitizeChatMessage(req.body.message);
     const moderationMessage = getChatModerationMessage(message);
     if (moderationMessage) {

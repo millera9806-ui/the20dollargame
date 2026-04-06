@@ -486,10 +486,6 @@
       color: #111;
     }
 
-    .chat-field--name {
-      max-width: 132px;
-    }
-
     .chat-send {
       flex-shrink: 0;
       padding: 11px 15px;
@@ -669,10 +665,6 @@
         align-items: stretch;
       }
 
-      .chat-field--name {
-        max-width: 118px;
-      }
-
       body.mobile-live h1 {
         font-size: 1.95em;
         margin-top: 20px;
@@ -848,10 +840,7 @@
       <p class="chat-empty">Open chat to see the lobby and build hype before the drop.</p>
     </div>
     <div class="chat-footer">
-      <label class="chat-field-label" for="chat-name">Nickname</label>
-      <div class="chat-row">
-        <input id="chat-name" class="chat-field chat-field--name" type="text" maxlength="16" placeholder="Guest" />
-      </div>
+      <label class="chat-field-label" for="chat-message">Live chat</label>
       <div class="chat-row">
         <input id="chat-message" class="chat-field" type="text" maxlength="120" placeholder="Say something..." />
         <button id="chat-send" class="chat-send" type="button">Send</button>
@@ -878,7 +867,6 @@
   </footer>
 
   <script>
-    const CHAT_NAME_STORAGE_KEY = "the20-chat-name";
     const CHAT_POLL_MS = 5000;
     const CHAT_RENDER_LIMIT = 80;
     const clockEl = document.getElementById("clock");
@@ -892,7 +880,6 @@
     const chatCloseEl = document.getElementById("chat-close");
     const chatStatusEl = document.getElementById("chat-status");
     const chatMessagesEl = document.getElementById("chat-messages");
-    const chatNameEl = document.getElementById("chat-name");
     const chatMessageEl = document.getElementById("chat-message");
     const chatSendEl = document.getElementById("chat-send");
     const chatFeedbackEl = document.getElementById("chat-feedback");
@@ -946,36 +933,6 @@
 
     function isMobileViewport() {
       return window.matchMedia("(max-width: 640px)").matches;
-    }
-
-    function getDefaultChatName() {
-      return `Guest${Math.floor(Math.random() * 9000) + 1000}`;
-    }
-
-    function getStoredChatName() {
-      try {
-        return localStorage.getItem(CHAT_NAME_STORAGE_KEY) || "";
-      } catch {
-        return "";
-      }
-    }
-
-    function saveChatName(name) {
-      try {
-        localStorage.setItem(CHAT_NAME_STORAGE_KEY, name);
-      } catch {
-        // Ignore storage issues and keep the current nickname in memory only.
-      }
-    }
-
-    function sanitizeClientChatName(value) {
-      const cleaned = String(value || "")
-        .replace(/\s+/g, " ")
-        .replace(/[^A-Za-z0-9 _-]/g, "")
-        .trim()
-        .slice(0, 16);
-
-      return cleaned || getDefaultChatName();
     }
 
     function sanitizeClientChatMessage(value) {
@@ -1036,7 +993,7 @@
 
       const author = document.createElement("span");
       author.className = "chat-author";
-      author.textContent = message.nickname;
+      author.textContent = message.nickname || "potential winner";
 
       const time = document.createElement("time");
       time.className = "chat-time";
@@ -1195,11 +1152,7 @@
     }
 
     async function postChatMessage(messageOverride = "") {
-      const nickname = sanitizeClientChatName(chatNameEl.value);
       const message = sanitizeClientChatMessage(messageOverride || chatMessageEl.value);
-
-      chatNameEl.value = nickname;
-      saveChatName(nickname);
 
       if (!message) {
         setChatFeedback("Type a message before sending.", "is-error");
@@ -1217,7 +1170,7 @@
         const res = await fetch("/chat/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ nickname, message })
+          body: JSON.stringify({ message })
         });
         const data = await res.json();
 
@@ -1532,7 +1485,6 @@
       }
     });
 
-    chatNameEl.value = sanitizeClientChatName(getStoredChatName() || getDefaultChatName());
     refreshChatToggle();
 
     chatToggleEl.addEventListener("click", () => {
