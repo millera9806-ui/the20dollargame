@@ -73,6 +73,39 @@
       max-width: 760px;
       line-height: 1.5;
       padding: 0 20px;
+      white-space: pre-line;
+    }
+
+    #confetti-layer {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    .confetti-piece {
+      position: absolute;
+      top: -14vh;
+      left: var(--left, 50%);
+      width: 10px;
+      height: 18px;
+      background: var(--color, #2ecc71);
+      opacity: 0;
+      transform: translate3d(0, 0, 0) rotate(0deg);
+      animation: confettiFall var(--duration, 3200ms) cubic-bezier(0.2, 0.8, 0.22, 1) forwards;
+      animation-delay: var(--delay, 0ms);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04);
+    }
+
+    .confetti-piece--streamer {
+      width: 6px;
+      height: 28px;
+      border-radius: 999px;
+    }
+
+    .confetti-piece--square {
+      border-radius: 2px;
     }
 
     .sponsor-card {
@@ -226,6 +259,20 @@
       100% {
         opacity: 1;
         transform: translateY(0);
+      }
+    }
+
+    @keyframes confettiFall {
+      0% {
+        opacity: 0;
+        transform: translate3d(0, -6vh, 0) rotate(0deg);
+      }
+      10% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 1;
+        transform: translate3d(var(--drift, 0px), 112vh, 0) rotate(var(--rotate, 360deg));
       }
     }
 
@@ -436,6 +483,8 @@
     </div>
   </section>
 
+  <div id="confetti-layer" class="hidden" aria-hidden="true"></div>
+
   <div id="winner-ticker">
     <span id="ticker-text">Loading recent winners...</span>
   </div>
@@ -452,6 +501,7 @@
     const sponsorCardEl = document.getElementById("sponsor-card");
     const sponsorHeadlineEl = document.getElementById("sponsor-headline");
     const sponsorSublineEl = document.getElementById("sponsor-subline");
+    const confettiLayerEl = document.getElementById("confetti-layer");
 
     const losingQuotes = [
       "Success is not final, failure is not fatal: it is the courage to continue that counts. - Winston Churchill",
@@ -484,6 +534,9 @@
     let claimSession = null;
     let losingQuote = "";
     let sponsorMode = "teaser";
+    let handledResolvedClaimId = null;
+    let resultRedirectTimer = null;
+    let confettiCleanupTimer = null;
 
     function getRandomLosingQuote() {
       return losingQuotes[Math.floor(Math.random() * losingQuotes.length)];
@@ -492,6 +545,68 @@
     function setMobilePhase(phase) {
       document.body.classList.remove("mobile-home", "mobile-live", "mobile-entered", "mobile-result");
       document.body.classList.add(phase);
+    }
+
+    function scheduleResultReset() {
+      if (resultRedirectTimer) {
+        return;
+      }
+
+      resultRedirectTimer = window.setTimeout(() => {
+        window.location.replace(window.location.pathname || "/");
+      }, 30000);
+    }
+
+    function clearConfetti() {
+      if (confettiCleanupTimer) {
+        window.clearTimeout(confettiCleanupTimer);
+        confettiCleanupTimer = null;
+      }
+
+      confettiLayerEl.innerHTML = "";
+      confettiLayerEl.classList.add("hidden");
+    }
+
+    function launchConfetti() {
+      clearConfetti();
+
+      const colors = ["#000000", "#2ecc71", "#f1c40f", "#6b6b6b"];
+      confettiLayerEl.classList.remove("hidden");
+
+      for (let index = 0; index < 44; index += 1) {
+        const piece = document.createElement("span");
+        piece.className = `confetti-piece ${index % 3 === 0 ? "confetti-piece--streamer" : "confetti-piece--square"}`;
+        piece.style.setProperty("--left", `${Math.random() * 100}%`);
+        piece.style.setProperty("--drift", `${Math.round((Math.random() - 0.5) * 260)}px`);
+        piece.style.setProperty("--rotate", `${Math.round((Math.random() - 0.5) * 960)}deg`);
+        piece.style.setProperty("--delay", `${Math.round(Math.random() * 420)}ms`);
+        piece.style.setProperty("--duration", `${2800 + Math.round(Math.random() * 1400)}ms`);
+        piece.style.setProperty("--color", colors[index % colors.length]);
+        confettiLayerEl.appendChild(piece);
+      }
+
+      confettiCleanupTimer = window.setTimeout(() => {
+        clearConfetti();
+      }, 4600);
+    }
+
+    function handleResolvedClaimEffects() {
+      if (!claimSession?.resolved || !claimSession?.claimId) {
+        return;
+      }
+
+      if (handledResolvedClaimId === claimSession.claimId) {
+        return;
+      }
+
+      handledResolvedClaimId = claimSession.claimId;
+      scheduleResultReset();
+
+      if (claimSession.winner) {
+        launchConfetti();
+      } else {
+        clearConfetti();
+      }
     }
 
     function setSponsorMode(mode) {
@@ -520,7 +635,14 @@
         const res = await fetch("/state");
         return await res.json();
       } catch {
-        return { openWindow: false, remaining: 0, recent: [], hasWinnerToday: false };
+        return {
+          openWindow: false,
+          remaining: 0,
+          recent: [],
+          hasWinnerToday: false,
+          totalPlayersToday: 0,
+          winnerPayoutId: null
+        };
       }
     }
 
@@ -568,11 +690,23 @@
       }
 
       if (claimSession.winner) {
-        return "You won! Admin will confirm payout soon.";
+        return "You won! Admin will confirm payout soon.\n\nPlease post a screenshot and tag our socials @the20dollargame on X, TikTok, and Instagram.\n\nProblem?\nContact our support team here:\n\nthe20dollargamesupport@gmail.com";
       }
 
       const playerCount = claimSession.totalPlayers || 0;
       return `${losingQuote} ${playerCount} players played the game. Come back tomorrow from 6-9 PM PST and try again.`;
+    }
+
+    function getClosedDayMessage(state) {
+      const playerCount = state.totalPlayersToday || 0;
+      const playerLabel = playerCount === 1 ? "user" : "users";
+      const winnerHandle = state.winnerPayoutId || "today's winner";
+
+      if (state.hasWinnerToday && state.winnerPayoutId) {
+        return `Today's draw is over. ${playerCount} ${playerLabel} played the game and ${winnerHandle} walked away with $20. Come back tomorrow from 6-9 PM PST for the next drop.`;
+      }
+
+      return "Today's draw is over. Come back tomorrow from 6-9 PM PST for the next drop.";
     }
 
     async function updateUI() {
@@ -612,6 +746,7 @@
       }
 
       if (claimSession?.resolved) {
+        handleResolvedClaimEffects();
         setMobilePhase("mobile-result");
         statusEl.textContent = getResolvedStatusMessage();
         return;
@@ -620,7 +755,7 @@
       setMobilePhase("mobile-home");
 
       if (state.hasWinnerToday) {
-        statusEl.textContent = "Today's draw is over. Come back tomorrow from 6-9 PM PST for the next drop.";
+        statusEl.textContent = getClosedDayMessage(state);
         return;
       }
 
@@ -659,6 +794,12 @@
           roundId: data.roundId,
           resolved: false
         };
+        handledResolvedClaimId = null;
+        if (resultRedirectTimer) {
+          window.clearTimeout(resultRedirectTimer);
+          resultRedirectTimer = null;
+        }
+        clearConfetti();
 
         setSponsorMode("featured");
         setMobilePhase("mobile-entered");

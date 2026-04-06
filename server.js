@@ -170,6 +170,29 @@ async function hasWinnerToday() {
   return (row?.total || 0) > 0;
 }
 
+async function getTodayDrawSummary() {
+  const todayStart = pacificMidnightMs();
+  const totals = await db.get(
+    "SELECT COUNT(*) AS totalPlayers FROM claims WHERE created_at >= ?",
+    [todayStart]
+  );
+  const winner = await db.get(
+    `
+      SELECT payout_id
+      FROM past_winners
+      WHERE selected_at >= ?
+      ORDER BY selected_at DESC
+      LIMIT 1
+    `,
+    [todayStart]
+  );
+
+  return {
+    totalPlayers: totals?.totalPlayers || 0,
+    winnerPayoutId: winner?.payout_id || null
+  };
+}
+
 async function closeWindowAndPickWinner(roundId) {
   openWindow = false;
   windowExpiresAt = 0;
@@ -231,6 +254,7 @@ async function closeWindowAndPickWinner(roundId) {
 app.get("/state", async (req, res) => {
   try {
     const remaining = Math.max(0, Math.floor((windowExpiresAt - Date.now()) / 1000));
+    const todaySummary = await getTodayDrawSummary();
     const recent = await db.all(
       `
         SELECT payout_id
@@ -244,7 +268,9 @@ app.get("/state", async (req, res) => {
       openWindow,
       remaining,
       recent,
-      hasWinnerToday: await hasWinnerToday()
+      hasWinnerToday: await hasWinnerToday(),
+      totalPlayersToday: todaySummary.totalPlayers,
+      winnerPayoutId: todaySummary.winnerPayoutId
     });
   } catch (err) {
     console.error("State error:", err);
