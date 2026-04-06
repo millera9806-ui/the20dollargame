@@ -115,11 +115,14 @@
       border: 1px solid #e2e2e2;
       border-radius: 16px;
       background: #fafafa;
+      transform-origin: top center;
       transition:
         background 220ms ease,
         border-color 220ms ease,
         box-shadow 220ms ease,
-        padding 220ms ease;
+        padding 220ms ease,
+        transform 320ms ease,
+        opacity 320ms ease;
     }
 
     .sponsor-card--teaser {
@@ -146,13 +149,6 @@
       margin: 10px 0 6px;
       font-size: 1.05em;
       font-weight: 600;
-    }
-
-    .sponsor-subline {
-      margin: 0;
-      font-size: 0.92em;
-      line-height: 1.5;
-      color: #666;
     }
 
     .sponsor-logo-frame {
@@ -191,7 +187,7 @@
     }
 
     .sponsor-card--teaser .sponsor-headline {
-      font-size: 0.98em;
+      display: none;
     }
 
     .sponsor-card--teaser .sponsor-logo-frame {
@@ -287,6 +283,11 @@
       display: none;
     }
 
+    body.sponsor-spotlight-active:not(.mobile-entered) #sponsor-card {
+      transform: translateY(-8px) scale(1.035);
+      box-shadow: 0 18px 36px rgba(0, 0, 0, 0.09);
+    }
+
     @media (max-width: 640px) {
       body {
         min-height: 100svh;
@@ -376,10 +377,13 @@
         padding: 0 18px;
       }
 
-      body.mobile-live h1,
-      body.mobile-entered h1 {
+      body.mobile-live h1 {
         font-size: 1.95em;
         margin-top: 20px;
+      }
+
+      body.mobile-entered h1 {
+        display: none;
       }
 
       body.mobile-live h2,
@@ -409,11 +413,60 @@
       }
 
       body.mobile-entered .sponsor-card {
-        margin-top: 20px;
+        position: fixed;
+        top: 70px;
+        left: 50%;
+        width: min(calc(100% - 28px), 320px);
+        margin: 0;
+        padding: 10px 12px 12px;
+        transform: translateX(-50%) scale(0.94);
+        opacity: 0.94;
+        z-index: 12;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.05);
       }
 
-      body.mobile-entered .sponsor-subline {
-        display: none;
+      body.mobile-entered .sponsor-kicker {
+        font-size: 0.68em;
+      }
+
+      body.mobile-entered .sponsor-logo-frame {
+        width: min(100%, 182px);
+        min-height: 60px;
+        margin-top: 10px;
+        padding: 12px 10px;
+      }
+
+      body.mobile-entered .logo-placeholder-main {
+        font-size: 1.02em;
+        letter-spacing: 0.2em;
+      }
+
+      body.mobile-entered .logo-placeholder-sub {
+        margin-top: 5px;
+        font-size: 0.66em;
+        letter-spacing: 0.28em;
+      }
+
+      body.mobile-entered #clock {
+        margin-top: 192px;
+      }
+
+      body.mobile-entered.sponsor-spotlight-active .sponsor-card {
+        top: 18px;
+        width: min(calc(100% - 24px), 350px);
+        padding: 14px 14px 16px;
+        transform: translateX(-50%) scale(1.03);
+        opacity: 1;
+        box-shadow: 0 16px 38px rgba(0, 0, 0, 0.09);
+      }
+
+      body.mobile-entered.sponsor-spotlight-active .sponsor-logo-frame {
+        width: min(100%, 236px);
+        min-height: 78px;
+      }
+
+      body.mobile-entered.sponsor-spotlight-active #clock {
+        margin-top: 230px;
       }
 
       body.mobile-result {
@@ -471,10 +524,7 @@
 
   <section id="sponsor-card" class="sponsor-card sponsor-card--teaser" aria-live="polite">
     <p class="sponsor-kicker">Sponsor Spotlight</p>
-    <p id="sponsor-headline" class="sponsor-headline">A small sponsor credit can live here.</p>
-    <p id="sponsor-subline" class="sponsor-subline">
-      Keep it quiet on the homepage, then let it gently open up after someone enters.
-    </p>
+    <p id="sponsor-headline" class="sponsor-headline"></p>
     <div class="sponsor-logo-frame" role="img" aria-label="Sample sponsor logo placeholder">
       <div class="logo-placeholder">
         <span class="logo-placeholder-main">YOUR LOGO</span>
@@ -500,7 +550,6 @@
     const formEl = document.getElementById("claim-form");
     const sponsorCardEl = document.getElementById("sponsor-card");
     const sponsorHeadlineEl = document.getElementById("sponsor-headline");
-    const sponsorSublineEl = document.getElementById("sponsor-subline");
     const confettiLayerEl = document.getElementById("confetti-layer");
 
     const losingQuotes = [
@@ -537,6 +586,7 @@
     let handledResolvedClaimId = null;
     let resultRedirectTimer = null;
     let confettiCleanupTimer = null;
+    let sponsorSpotlightTimer = null;
 
     function getRandomLosingQuote() {
       return losingQuotes[Math.floor(Math.random() * losingQuotes.length)];
@@ -545,6 +595,10 @@
     function setMobilePhase(phase) {
       document.body.classList.remove("mobile-home", "mobile-live", "mobile-entered", "mobile-result");
       document.body.classList.add(phase);
+
+      if (phase !== "mobile-entered") {
+        clearSponsorSpotlight();
+      }
     }
 
     function scheduleResultReset() {
@@ -565,6 +619,25 @@
 
       confettiLayerEl.innerHTML = "";
       confettiLayerEl.classList.add("hidden");
+    }
+
+    function clearSponsorSpotlight() {
+      if (sponsorSpotlightTimer) {
+        window.clearTimeout(sponsorSpotlightTimer);
+        sponsorSpotlightTimer = null;
+      }
+
+      document.body.classList.remove("sponsor-spotlight-active");
+    }
+
+    function triggerSponsorSpotlight() {
+      clearSponsorSpotlight();
+      document.body.classList.add("sponsor-spotlight-active");
+
+      sponsorSpotlightTimer = window.setTimeout(() => {
+        document.body.classList.remove("sponsor-spotlight-active");
+        sponsorSpotlightTimer = null;
+      }, 2600);
     }
 
     function launchConfetti() {
@@ -620,14 +693,11 @@
 
       if (mode === "featured") {
         sponsorHeadlineEl.textContent = "Today's game is brought to you by";
-        sponsorSublineEl.textContent =
-          "A soft sponsor moment can sit here after entry while the timer and status message stay in focus.";
         return;
       }
 
-      sponsorHeadlineEl.textContent = "A small sponsor credit can live here.";
-      sponsorSublineEl.textContent =
-        "Keep it quiet on the homepage, then let it gently open up after someone enters.";
+      clearSponsorSpotlight();
+      sponsorHeadlineEl.textContent = "";
     }
 
     async function fetchState() {
@@ -803,6 +873,7 @@
 
         setSponsorMode("featured");
         setMobilePhase("mobile-entered");
+        triggerSponsorSpotlight();
         statusEl.textContent = "Fingers crossed. You're in the draw. One winner will be chosen when the timer ends.";
         if (window.grecaptcha) {
           grecaptcha.reset();
