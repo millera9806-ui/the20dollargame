@@ -241,17 +241,153 @@
     }
 
     @media (max-width: 640px) {
-      .sponsor-card {
+      body {
+        min-height: 100svh;
+        padding-bottom: 56px;
+      }
+
+      .nav {
+        position: static;
+        display: flex;
+        justify-content: center;
+        gap: 18px;
+        padding-top: 14px;
+      }
+
+      .nav a {
+        margin-left: 0;
+        font-size: 0.95em;
+      }
+
+      h1 {
+        font-size: 2.35em;
+        margin-top: 34px;
+        padding: 0 16px;
+      }
+
+      h2 {
+        max-width: 320px;
+        margin: 0.85em auto 1.5em;
+        padding: 0 18px;
+        font-size: 0.98em;
+        line-height: 1.5;
+      }
+
+      #clock {
+        font-size: clamp(4.2rem, 22vw, 6.2rem);
         margin-top: 20px;
+        line-height: 0.92;
+        letter-spacing: -0.04em;
+      }
+
+      #status {
+        max-width: 340px;
+        margin-top: 14px;
+        padding: 0 18px;
+        font-size: 1.02em;
+      }
+
+      #claim-form {
+        padding: 0 16px;
+      }
+
+      select,
+      input,
+      button {
+        display: block;
+        width: min(100%, 320px);
+        margin: 8px auto;
+      }
+
+      .g-recaptcha {
+        transform: scale(0.92);
+        transform-origin: center top;
+      }
+
+      .sponsor-card {
+        max-width: 340px;
+        margin-top: 18px;
         padding: 14px 14px;
+        border-radius: 14px;
       }
 
       .sponsor-logo-frame {
-        width: min(100%, 270px);
+        width: min(100%, 250px);
+        min-height: 78px;
       }
 
       .logo-placeholder-main {
         font-size: 1.3em;
+      }
+
+      #winner-ticker {
+        font-size: 0.82em;
+        padding: 0.45em;
+      }
+
+      footer {
+        padding: 0 18px;
+      }
+
+      body.mobile-live h1,
+      body.mobile-entered h1 {
+        font-size: 1.95em;
+        margin-top: 20px;
+      }
+
+      body.mobile-live h2,
+      body.mobile-entered h2 {
+        display: none;
+      }
+
+      body.mobile-live #clock,
+      body.mobile-entered #clock {
+        margin-top: 34px;
+        font-size: clamp(4.8rem, 25vw, 6.9rem);
+      }
+
+      body.mobile-live #status,
+      body.mobile-entered #status {
+        max-width: 300px;
+        font-size: 1em;
+      }
+
+      body.mobile-live .sponsor-card {
+        display: none;
+      }
+
+      body.mobile-entered #winner-ticker,
+      body.mobile-entered footer {
+        display: none;
+      }
+
+      body.mobile-entered .sponsor-card {
+        margin-top: 20px;
+      }
+
+      body.mobile-entered .sponsor-subline {
+        display: none;
+      }
+
+      body.mobile-result {
+        min-height: 100svh;
+      }
+
+      body.mobile-result .nav,
+      body.mobile-result h1,
+      body.mobile-result h2,
+      body.mobile-result #sponsor-card,
+      body.mobile-result #winner-ticker,
+      body.mobile-result footer {
+        display: none;
+      }
+
+      body.mobile-result #status {
+        max-width: 340px;
+        margin: 22svh auto 0;
+        font-size: 1.16em;
+        line-height: 1.72;
+        padding: 0 22px;
       }
     }
   </style>
@@ -353,6 +489,11 @@
       return losingQuotes[Math.floor(Math.random() * losingQuotes.length)];
     }
 
+    function setMobilePhase(phase) {
+      document.body.classList.remove("mobile-home", "mobile-live", "mobile-entered", "mobile-result");
+      document.body.classList.add(phase);
+    }
+
     function setSponsorMode(mode) {
       if (sponsorMode === mode) {
         return;
@@ -445,6 +586,7 @@
       }
 
       if (state.openWindow && state.remaining > 0) {
+        setMobilePhase(claimSession?.claimId ? "mobile-entered" : "mobile-live");
         const mins = String(Math.floor(state.remaining / 60)).padStart(2, "0");
         const secs = String(state.remaining % 60).padStart(2, "0");
         clockEl.textContent = `${mins}:${secs}`;
@@ -452,7 +594,7 @@
 
         if (claimSession?.claimId) {
           formEl.classList.add("hidden");
-          statusEl.textContent = "You are in the draw. One winner will be chosen when the timer ends.";
+          statusEl.textContent = "Fingers crossed. You're in the draw. One winner will be chosen when the timer ends.";
         } else {
           formEl.classList.remove("hidden");
           statusEl.textContent = "The drop is live. Enter before the 60-second window closes.";
@@ -464,14 +606,18 @@
       formEl.classList.add("hidden");
 
       if (claimSession?.claimId && !claimSession.resolved) {
-        statusEl.textContent = "Entry received. Picking a winner now...";
+        setMobilePhase("mobile-entered");
+        statusEl.textContent = "Fingers crossed. Picking a winner now...";
         return;
       }
 
       if (claimSession?.resolved) {
+        setMobilePhase("mobile-result");
         statusEl.textContent = getResolvedStatusMessage();
         return;
       }
+
+      setMobilePhase("mobile-home");
 
       if (state.hasWinnerToday) {
         statusEl.textContent = "Today's draw is over. Come back tomorrow from 6-9 PM PST for the next drop.";
@@ -504,6 +650,7 @@
           statusEl.textContent = data.msg || "Could not submit your entry. Please try again.";
           claimSession = null;
           setSponsorMode("teaser");
+          setMobilePhase(clockEl.classList.contains("hidden") ? "mobile-home" : "mobile-live");
           return;
         }
 
@@ -514,13 +661,15 @@
         };
 
         setSponsorMode("featured");
-        statusEl.textContent = "You are in the draw. One winner will be chosen when the timer ends.";
+        setMobilePhase("mobile-entered");
+        statusEl.textContent = "Fingers crossed. You're in the draw. One winner will be chosen when the timer ends.";
         if (window.grecaptcha) {
           grecaptcha.reset();
         }
       } catch {
         claimSession = null;
         setSponsorMode("teaser");
+        setMobilePhase(clockEl.classList.contains("hidden") ? "mobile-home" : "mobile-live");
         statusEl.textContent = "Could not submit your entry. Please try again.";
       }
     });
