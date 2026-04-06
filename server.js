@@ -18,6 +18,32 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, "public");
 const DB_DIR = path.join(__dirname, "data");
 const DB_PATH = path.join(DB_DIR, "claims.db");
+const CHAT_FETCH_LIMIT = 60;
+const CHAT_MAX_MESSAGE_LENGTH = 120;
+const CHAT_MAX_NICKNAME_LENGTH = 16;
+const CHAT_SLOW_MODE_MS = 8000;
+const CHAT_MAX_POSTS_PER_MINUTE = 6;
+const CHAT_MESSAGE_RETENTION_MS = 24 * 60 * 60 * 1000;
+const CHAT_STALE_RATE_LIMIT_MS = 10 * 60 * 1000;
+const BLOCKED_CHAT_TERMS = [
+  "fuck",
+  "shit",
+  "bitch",
+  "cunt",
+  "nigger",
+  "nigga",
+  "faggot",
+  "retard",
+  "slut",
+  "whore",
+  "asshole",
+  "dickhead",
+  "killyourself",
+  "suicide",
+  "rapist",
+  "rape"
+];
+const chatRateLimiter = new Map();
 
 app.set("trust proxy", 1);
 app.use(cors());
@@ -70,6 +96,21 @@ async function initDB() {
       selected_at INTEGER NOT NULL,
       FOREIGN KEY (claim_id) REFERENCES claims(id)
     );
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nickname TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      ip_address TEXT NOT NULL
+    );
+  `);
+
+  await db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at
+    ON chat_messages(created_at DESC)
   `);
 
   await db.run(
@@ -126,6 +167,133 @@ function normalizeIp(ipAddress) {
 
 function getClientIp(req) {
   return normalizeIp(req.ip || req.socket?.remoteAddress || "");
+}
+
+function sanitizeChatNickname(value) {
+  const cleaned = String(value || "")
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .replace(/[^A-Za-z0-9 _-]/g, "")
+    .trim()
+    .slice(0, CHAT_MAX_NICKNAME_LENGTH);
+
+  return cleaned || `Guest${Math.floor(Math.random() * 9000) + 1000}`;
+}
+
+function sanitizeChatMessage(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .replace(/[<>]/g, "")
+    .trim()
+    .slice(0, CHAT_MAX_MESSAGE_LENGTH);
+}
+
+function normalizeChatForModeration(value) {
+  const substitutions = {
+    "0": "o",
+    "1": "i",
+    "3": "e",
+    "4": "a",
+    "5": "s",
+    "7": "t",
+    "@": "a",
+    "$": "s",
+    "!": "i"
+  };
+
+  return sanitizeChatMessage(value)
+    .toLowerCase()
+    .replace(/[013457@$!]/g, (char) => substitutions[char] || char)
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function getChatModerationMessage(message) {
+  if (!message) {
+    return "Type a message before sending.";
+  }
+
+  if (/(https?:\/\/|www\.|(?:[a-z0-9-]+\.)+(?:com|net|org|gg|io|co|ly|app|me|tv|xyz)\b)/i.test(message)) {
+    return "Links are not allowed in chat.";
+  }
+
+  if (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(message)) {
+    return "Contact information is not allowed in chat.";
+  }
+
+  if (/(?:\+?\d[\d .-]{7,}\d)/.test(message)) {
+    return "Contact information is not allowed in chat.";
+  }
+
+  if (/(.)\1{14,}/i.test(message)) {
+    return "Please avoid spammy messages.";
+  }
+
+  const normalized = normalizeChatForModeration(message);
+  if (BLOCKED_CHAT_TERMS.some((term) => normalized.includes(term))) {
+    return "Keep chat clean for everyone.";
+  }
+
+  return null;
+}
+
+function getChatRateLimitMessage(ipAddress) {
+  const now = Date.now();
+  const existing = chatRateLimiter.get(ipAddress) || { lastPostedAt: 0, recentPosts: [] };
+  const recentPosts = existing.recentPosts.filter((timestamp) => now - timestamp < 60000);
+
+  if (now - existing.lastPostedAt < CHAT_SLOW_MODE_MS) {
+    const seconds = Math.ceil((CHAT_SLOW_MODE_MS - (now - existing.lastPostedAt)) / 1000);
+    return `Slow mode is on. Wait ${seconds}s and try again.`;
+  }
+
+  if (recentPosts.length >= CHAT_MAX_POSTS_PER_MINUTE) {
+    return "You're sending messages too fast. Try again in a minute.";
+  }
+
+  recentPosts.push(now);
+  chatRateLimiter.set(ipAddress, { lastPostedAt: now, recentPosts });
+  return null;
+}
+
+async function isDuplicateRecentChatMessage(ipAddress, message) {
+  const row = await db.get(
+    `
+      SELECT id
+      FROM chat_messages
+      WHERE ip_address = ?
+        AND lower(message) = lower(?)
+        AND created_at >= ?
+      ORDER BY id DESC
+      LIMIT 1
+    `,
+    [ipAddress, message, Date.now() - 2 * 60 * 1000]
+  );
+
+  return Boolean(row);
+}
+
+async function cleanupChatMessages() {
+  await db.run("DELETE FROM chat_messages WHERE created_at < ?", [Date.now() - CHAT_MESSAGE_RETENTION_MS]);
+  await db.run(`
+    DELETE FROM chat_messages
+    WHERE id NOT IN (
+      SELECT id
+      FROM chat_messages
+      ORDER BY id DESC
+      LIMIT 250
+    )
+  `);
+
+  for (const [ipAddress, entry] of chatRateLimiter.entries()) {
+    const recentPosts = entry.recentPosts.filter((timestamp) => Date.now() - timestamp < 60000);
+    if (!recentPosts.length && Date.now() - entry.lastPostedAt > CHAT_STALE_RATE_LIMIT_MS) {
+      chatRateLimiter.delete(ipAddress);
+      continue;
+    }
+
+    chatRateLimiter.set(ipAddress, { ...entry, recentPosts });
+  }
 }
 
 async function verifyCaptcha(token) {
@@ -274,6 +442,93 @@ app.get("/state", async (req, res) => {
     });
   } catch (err) {
     console.error("State error:", err);
+    res.status(500).json({ ok: false, msg: "Server error" });
+  }
+});
+
+app.get("/chat/messages", async (req, res) => {
+  try {
+    const afterId = Math.max(0, Number.parseInt(req.query.after || "0", 10) || 0);
+    let messages;
+
+    if (afterId > 0) {
+      messages = await db.all(
+        `
+          SELECT id, nickname, message, created_at
+          FROM chat_messages
+          WHERE id > ?
+          ORDER BY id ASC
+          LIMIT ${CHAT_FETCH_LIMIT}
+        `,
+        [afterId]
+      );
+    } else {
+      messages = await db.all(`
+        SELECT id, nickname, message, created_at
+        FROM chat_messages
+        ORDER BY id DESC
+        LIMIT ${CHAT_FETCH_LIMIT}
+      `);
+      messages.reverse();
+    }
+
+    const lastMessageId = messages.length ? messages[messages.length - 1].id : afterId;
+
+    res.json({
+      ok: true,
+      messages,
+      lastMessageId,
+      slowModeMs: CHAT_SLOW_MODE_MS
+    });
+  } catch (err) {
+    console.error("Chat fetch error:", err);
+    res.status(500).json({ ok: false, msg: "Server error" });
+  }
+});
+
+app.post("/chat/messages", async (req, res) => {
+  try {
+    const ipAddress = getClientIp(req);
+    if (!ipAddress) {
+      return res.status(400).json({ ok: false, msg: "Could not verify your network address" });
+    }
+
+    const nickname = sanitizeChatNickname(req.body.nickname);
+    const message = sanitizeChatMessage(req.body.message);
+    const moderationMessage = getChatModerationMessage(message);
+    if (moderationMessage) {
+      return res.status(400).json({ ok: false, msg: moderationMessage });
+    }
+
+    const rateLimitMessage = getChatRateLimitMessage(ipAddress);
+    if (rateLimitMessage) {
+      return res.status(429).json({ ok: false, msg: rateLimitMessage });
+    }
+
+    if (await isDuplicateRecentChatMessage(ipAddress, message)) {
+      return res.status(409).json({ ok: false, msg: "You already sent that message recently." });
+    }
+
+    const createdAt = Date.now();
+    const result = await db.run(
+      `
+        INSERT INTO chat_messages (nickname, message, created_at, ip_address)
+        VALUES (?, ?, ?, ?)
+      `,
+      [nickname, message, createdAt, ipAddress]
+    );
+
+    res.json({
+      ok: true,
+      message: {
+        id: result.lastID,
+        nickname,
+        message,
+        created_at: createdAt
+      }
+    });
+  } catch (err) {
+    console.error("Chat post error:", err);
     res.status(500).json({ ok: false, msg: "Server error" });
   }
 });
@@ -464,12 +719,25 @@ app.post("/admin/open", requireAdmin, async (req, res) => {
 });
 
 cron.schedule(
+  "0 * * * *",
+  async () => {
+    try {
+      await cleanupChatMessages();
+    } catch (err) {
+      console.error("Chat cleanup error:", err);
+    }
+  },
+  { timezone: "America/Los_Angeles" }
+);
+
+cron.schedule(
   "0 0 * * *",
   async () => {
     try {
       openWindow = false;
       windowExpiresAt = 0;
       currentRoundId = null;
+      await cleanupChatMessages();
       console.log("Midnight reset (Pacific) triggered");
     } catch (err) {
       console.error("Midnight reset error:", err);
