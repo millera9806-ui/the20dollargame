@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>The $20 Dollar Game</title>
 
-  <!-- 🧠 SEO + Social Meta -->
+  <!-- SEO + Social Meta -->
   <meta name="description" content="The $20 Dollar Game — one winner every day. No gimmicks. Real cash. Just be fast." />
   <meta name="keywords" content="$20 game, daily giveaway, win money, cash app, venmo, paypal, free cash, daily contest" />
   <meta property="og:title" content="The $20 Dollar Game" />
@@ -17,7 +17,7 @@
   <meta name="twitter:title" content="The $20 Dollar Game" />
   <meta name="twitter:description" content="One winner every day. No gimmicks. Real cash." />
 
-  <!-- 💰 Favicon -->
+  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png" />
 
   <style>
@@ -134,7 +134,6 @@
 </head>
 
 <body>
-  <!-- top-right nav -->
   <div class="nav">
     <a href="faq.html">FAQ</a>
     <a href="contact.html">Contact</a>
@@ -171,7 +170,42 @@
     const clockEl = document.getElementById("clock");
     const statusEl = document.getElementById("status");
     const formEl = document.getElementById("claim-form");
+
+    const losingQuotes = [
+      "Success is not final, failure is not fatal: it is the courage to continue that counts. - Winston Churchill",
+      "Our greatest glory is not in never failing, but in rising every time we fall. - Confucius",
+      "It does not matter how slowly you go as long as you do not stop. - Confucius",
+      "Failure is simply the opportunity to begin again, this time more intelligently. - Henry Ford",
+      "I have not failed. I've just found 10,000 ways that won't work. - Thomas Edison",
+      "Only those who dare to fail greatly can ever achieve greatly. - Robert F. Kennedy",
+      "Fall seven times, stand up eight. - Japanese Proverb",
+      "You may encounter many defeats, but you must not be defeated. - Maya Angelou",
+      "It always seems impossible until it's done. - Nelson Mandela",
+      "Try again. Fail again. Fail better. - Samuel Beckett",
+      "Do not be embarrassed by your failures, learn from them and start again. - Richard Branson",
+      "Failure is success in progress. - Albert Einstein",
+      "Success usually comes to those who are too busy to be looking for it. - Henry David Thoreau",
+      "A person who never made a mistake never tried anything new. - Albert Einstein",
+      "Perseverance is failing 19 times and succeeding the 20th. - Julie Andrews",
+      "The secret of life is to fall seven times and to get up eight times. - Paulo Coelho",
+      "Courage doesn't always roar. Sometimes courage is the quiet voice... 'I will try again tomorrow.' - Mary Anne Radmacher",
+      "Energy and persistence conquer all things. - Benjamin Franklin",
+      "What defines us is how well we rise after falling. - Lionel Messi",
+      "You just can't beat the person who never gives up. - Babe Ruth",
+      "Many of life's failures are people who did not realize how close they were to success when they gave up. - Thomas Edison",
+      "Keep going. Everything you need will come to you at the perfect time. - Napoleon Hill",
+      "Winners are not afraid of losing. But losers are. Failure is part of the process of success. - Robert Kiyosaki",
+      "Act as if what you do makes a difference. It does. - William James",
+      "Don't watch the clock; do what it does. Keep going. - Sam Levenson"
+    ];
+
     let userResult = null;
+    let losingQuote = "";
+
+    function getRandomLosingQuote() {
+      const randomIndex = Math.floor(Math.random() * losingQuotes.length);
+      return losingQuotes[randomIndex];
+    }
 
     async function fetchState() {
       try {
@@ -193,7 +227,6 @@
     async function updateUI() {
       const { openWindow, remaining, isNewDay } = await fetchState();
 
-      // 🕓 NEW DAY MESSAGE
       if (isNewDay && !openWindow) {
         clockEl.classList.add("hidden");
         formEl.classList.add("hidden");
@@ -201,7 +234,6 @@
         return;
       }
 
-      // 🟢 ACTIVE WINDOW
       if (openWindow && remaining > 0) {
         const mins = String(Math.floor(remaining / 60)).padStart(2, "0");
         const secs = String(remaining % 60).padStart(2, "0");
@@ -209,15 +241,15 @@
         clockEl.classList.remove("hidden");
         if (!userResult) formEl.classList.remove("hidden");
         if (!userResult) statusEl.textContent = "Fingers crossed — waiting for results...";
-      }
-      // 🔴 CLOSED WINDOW (after win)
-      else {
+      } else {
         clockEl.classList.add("hidden");
         formEl.classList.add("hidden");
-        if (userResult) {
-          statusEl.textContent = userResult.winner
-            ? "🎉 You won! Admin will confirm payout soon."
-            : `Better luck next time — you were #${userResult.position}.`;
+
+        if (userResult?.winner) {
+          statusEl.textContent = "🎉 You won! Admin will confirm payout soon.";
+        } else if (userResult?.ok) {
+          if (!losingQuote) losingQuote = getRandomLosingQuote();
+          statusEl.textContent = `${losingQuote} You were #${userResult.position}.`;
         } else {
           statusEl.textContent = "Today's $20 has been claimed — try your luck again tomorrow!";
         }
@@ -232,13 +264,19 @@
 
       formEl.classList.add("hidden");
       statusEl.textContent = "Fingers crossed — waiting for results...";
+      losingQuote = "";
 
       const res = await fetch("/claim", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ payout_method: method, payout_id: handle, captcha })
       });
+
       userResult = await res.json();
+
+      if (userResult?.ok && !userResult.winner) {
+        losingQuote = getRandomLosingQuote();
+      }
     });
 
     setInterval(updateUI, 2000);
