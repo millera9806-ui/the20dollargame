@@ -5,9 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>The $20 Dollar Game</title>
 
-  <!-- SEO + Social Meta -->
-  <meta name="description" content="The $20 Dollar Game — one winner every day. No gimmicks. Real cash. Just be fast." />
-  <meta name="keywords" content="$20 game, daily giveaway, win money, cash app, venmo, paypal, free cash, daily contest" />
+  <meta
+    name="description"
+    content="The $20 Dollar Game - one winner every day. No gimmicks. Real cash. Just be ready."
+  />
+  <meta
+    name="keywords"
+    content="$20 game, daily giveaway, win money, cash app, venmo, paypal, free cash, daily contest"
+  />
   <meta property="og:title" content="The $20 Dollar Game" />
   <meta property="og:description" content="One winner every day. No gimmicks. Real cash." />
   <meta property="og:type" content="website" />
@@ -17,7 +22,6 @@
   <meta name="twitter:title" content="The $20 Dollar Game" />
   <meta name="twitter:description" content="One winner every day. No gimmicks. Real cash." />
 
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png" />
 
   <style>
@@ -63,9 +67,12 @@
     }
 
     #status {
-      font-size: 1.3em;
+      font-size: 1.15em;
       font-weight: 500;
-      margin-top: 0.5em;
+      margin: 0.5em auto 0;
+      max-width: 760px;
+      line-height: 1.5;
+      padding: 0 20px;
     }
 
     select,
@@ -127,7 +134,9 @@
       line-height: 1.4em;
     }
 
-    .hidden { display: none; }
+    .hidden {
+      display: none;
+    }
   </style>
 
   <script async src="https://www.google.com/recaptcha/api.js"></script>
@@ -140,7 +149,10 @@
   </div>
 
   <h1>The $20 Dollar Game</h1>
-  <h2>Visit each day for your chance to claim $20.<br>One winner each day. No gimmicks. Real cash.</h2>
+  <h2>
+    Check in daily from 6-9 PM PST for your shot at $20.<br />
+    One 60-second drop. One random winner. Real cash.
+  </h2>
 
   <div id="clock" class="hidden">01:00</div>
   <div id="status">Loading game status...</div>
@@ -154,7 +166,7 @@
     </select>
     <input id="handle" type="text" placeholder="@handle / email / $cashtag" required />
     <div class="g-recaptcha" data-sitekey="6LeKj_crAAAAAHt5YPYgUc3DSzTyVlkNdFKyk-3Z"></div>
-    <button type="submit">Gimme that $20</button>
+    <button type="submit">Enter the draw</button>
   </form>
 
   <div id="winner-ticker">
@@ -162,7 +174,7 @@
   </div>
 
   <footer>
-    © 2025 The $20 Dollar Game · No purchase necessary · Void where prohibited<br>
+    &copy; 2025 The $20 Dollar Game - No purchase necessary - Void where prohibited<br />
     Support the game: <strong>$the20dollargame</strong> | the20dollargame@gmail.com
   </footer>
 
@@ -199,12 +211,11 @@
       "Don't watch the clock; do what it does. Keep going. - Sam Levenson"
     ];
 
-    let userResult = null;
+    let claimSession = null;
     let losingQuote = "";
 
     function getRandomLosingQuote() {
-      const randomIndex = Math.floor(Math.random() * losingQuotes.length);
-      return losingQuotes[randomIndex];
+      return losingQuotes[Math.floor(Math.random() * losingQuotes.length)];
     }
 
     async function fetchState() {
@@ -212,70 +223,140 @@
         const res = await fetch("/state");
         return await res.json();
       } catch {
-        return { openWindow: false, remaining: 0, recent: [], isNewDay: false };
+        return { openWindow: false, remaining: 0, recent: [], hasWinnerToday: false };
       }
+    }
+
+    async function fetchClaimResult(claimId) {
+      const res = await fetch(`/claim-result/${claimId}`);
+      return res.json();
     }
 
     async function loadTicker() {
       const { recent } = await fetchState();
       const text = recent.length
-        ? "Recent Winners: " + recent.map(r => r.payout_id).join(" • ")
-        : "No winners yet — be the first!";
+        ? "Recent Winners: " + recent.map((winner) => winner.payout_id).join(" | ")
+        : "No winners yet - be the first!";
       document.getElementById("ticker-text").textContent = text;
     }
 
-    async function updateUI() {
-      const { openWindow, remaining, isNewDay } = await fetchState();
-
-      if (isNewDay && !openWindow) {
-        clockEl.classList.add("hidden");
-        formEl.classList.add("hidden");
-        statusEl.textContent = "Today's $20 hasn't been claimed yet — stay tuned!";
+    async function refreshClaimResult() {
+      if (!claimSession?.claimId || claimSession.resolved) {
         return;
       }
 
-      if (openWindow && remaining > 0) {
-        const mins = String(Math.floor(remaining / 60)).padStart(2, "0");
-        const secs = String(remaining % 60).padStart(2, "0");
-        clockEl.textContent = `${mins}:${secs}`;
-        clockEl.classList.remove("hidden");
-        if (!userResult) formEl.classList.remove("hidden");
-        if (!userResult) statusEl.textContent = "Fingers crossed — waiting for results...";
-      } else {
-        clockEl.classList.add("hidden");
-        formEl.classList.add("hidden");
-
-        if (userResult?.winner) {
-          statusEl.textContent = "🎉 You won! Admin will confirm payout soon.";
-        } else if (userResult?.ok) {
-          if (!losingQuote) losingQuote = getRandomLosingQuote();
-          statusEl.textContent = `${losingQuote} You were #${userResult.position}.`;
-        } else {
-          statusEl.textContent = "Today's $20 has been claimed — try your luck again tomorrow!";
+      try {
+        const result = await fetchClaimResult(claimSession.claimId);
+        if (!result.ok) {
+          return;
         }
+
+        claimSession = { ...claimSession, ...result };
+
+        if (result.resolved && !result.winner && !losingQuote) {
+          losingQuote = getRandomLosingQuote();
+        }
+
+        if (result.resolved) {
+          loadTicker();
+        }
+      } catch {
+        // Keep the current UI state and try again on the next poll.
       }
     }
 
-    formEl.addEventListener("submit", async e => {
-      e.preventDefault();
+    function getResolvedStatusMessage() {
+      if (!claimSession?.resolved) {
+        return "";
+      }
+
+      if (claimSession.winner) {
+        return "You won! Admin will confirm payout soon.";
+      }
+
+      const playerCount = claimSession.totalPlayers || 0;
+      return `${losingQuote} ${playerCount} players played the game. Come back tomorrow from 6-9 PM PST and try again.`;
+    }
+
+    async function updateUI() {
+      const state = await fetchState();
+      await refreshClaimResult();
+
+      if (state.openWindow && state.remaining > 0) {
+        const mins = String(Math.floor(state.remaining / 60)).padStart(2, "0");
+        const secs = String(state.remaining % 60).padStart(2, "0");
+        clockEl.textContent = `${mins}:${secs}`;
+        clockEl.classList.remove("hidden");
+
+        if (claimSession?.claimId) {
+          formEl.classList.add("hidden");
+          statusEl.textContent = "You are in the draw. One winner will be chosen when the timer ends.";
+        } else {
+          formEl.classList.remove("hidden");
+          statusEl.textContent = "The drop is live. Enter before the 60-second window closes.";
+        }
+        return;
+      }
+
+      clockEl.classList.add("hidden");
+      formEl.classList.add("hidden");
+
+      if (claimSession?.claimId && !claimSession.resolved) {
+        statusEl.textContent = "Entry received. Picking a winner now...";
+        return;
+      }
+
+      if (claimSession?.resolved) {
+        statusEl.textContent = getResolvedStatusMessage();
+        return;
+      }
+
+      if (state.hasWinnerToday) {
+        statusEl.textContent = "Today's draw is over. Come back tomorrow from 6-9 PM PST for the next drop.";
+        return;
+      }
+
+      statusEl.textContent = "The daily draw opens once between 6-9 PM PST. Check back and be ready.";
+    }
+
+    formEl.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
       const method = document.getElementById("method").value;
       const handle = document.getElementById("handle").value;
       const captcha = grecaptcha.getResponse();
 
       formEl.classList.add("hidden");
-      statusEl.textContent = "Fingers crossed — waiting for results...";
+      statusEl.textContent = "Submitting your entry...";
       losingQuote = "";
 
-      const res = await fetch("/claim", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ payout_method: method, payout_id: handle, captcha })
-      });
+      try {
+        const res = await fetch("/claim", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ payout_method: method, payout_id: handle, captcha })
+        });
+        const data = await res.json();
 
-      userResult = await res.json();
+        if (!res.ok || !data.ok) {
+          statusEl.textContent = data.msg || "Could not submit your entry. Please try again.";
+          claimSession = null;
+          return;
+        }
 
-      if (userResult?.ok && !userResult.winner) {
-        losingQuote = getRandomLosingQuote();
+        claimSession = {
+          claimId: data.claimId,
+          roundId: data.roundId,
+          resolved: false
+        };
+
+        statusEl.textContent = "You are in the draw. One winner will be chosen when the timer ends.";
+        if (window.grecaptcha) {
+          grecaptcha.reset();
+        }
+      } catch {
+        claimSession = null;
+        statusEl.textContent = "Could not submit your entry. Please try again.";
       }
     });
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin – The $20 Dollar Game</title>
+  <title>Admin - The $20 Dollar Game</title>
   <style>
     body {
       background: #fff;
@@ -19,37 +19,73 @@
       margin-bottom: 0.5em;
     }
 
+    p {
+      max-width: 720px;
+      margin: 0 auto 1em;
+      line-height: 1.5;
+    }
+
+    button,
+    input {
+      padding: 10px 20px;
+      border-radius: 5px;
+      margin: 10px;
+      font-size: 1em;
+    }
+
+    input {
+      border: 1px solid #ccc;
+      min-width: 240px;
+    }
+
     button {
       background-color: #2ecc71;
       color: #fff;
       border: none;
-      padding: 10px 20px;
-      border-radius: 5px;
       cursor: pointer;
       font-weight: bold;
-      margin: 10px;
     }
 
     button:hover {
       background-color: #27ae60;
     }
 
-    #claims {
-      width: 90%;
+    .panel {
+      max-width: 1100px;
+      margin: 0 auto 30px;
+    }
+
+    .status {
+      margin: 15px auto 25px;
+      padding: 12px 16px;
+      background: #f6f6f6;
+      border: 1px solid #e3e3e3;
+      border-radius: 8px;
+      max-width: 800px;
+    }
+
+    table {
+      width: 100%;
       margin: 20px auto;
       border-collapse: collapse;
       border: 1px solid #ddd;
       font-size: 0.9em;
     }
 
-    #claims th, #claims td {
+    th,
+    td {
       border: 1px solid #ddd;
       padding: 8px;
+      text-align: left;
     }
 
-    #claims th {
+    th {
       background: #f0f0f0;
       font-weight: bold;
+    }
+
+    h2 {
+      margin-top: 2em;
     }
 
     footer {
@@ -60,64 +96,147 @@
   </style>
 </head>
 <body>
-  <h1>Admin Dashboard</h1>
-  <p>Use this panel to open the daily claim window and review entries.</p>
+  <div class="panel">
+    <h1>Admin Dashboard</h1>
+    <p>
+      Open the daily 60-second draw window when you are ready, review all player claims,
+      and keep a separate history of past winners.
+    </p>
 
-  <div>
-    <input type="password" id="adminKey" placeholder="Admin password" />
-    <button onclick="openWindow()">Open 60s Window</button>
-    <button onclick="loadClaims()">Refresh Claims</button>
+    <div>
+      <input type="password" id="adminKey" placeholder="Admin password" />
+      <button onclick="openWindow()">Open 60s Draw Window</button>
+      <button onclick="loadDashboard()">Refresh Dashboard</button>
+    </div>
+
+    <div id="dashboard-status" class="status">Enter your admin password to load dashboard data.</div>
+
+    <h2>Claims</h2>
+    <table id="claims">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Round</th>
+          <th>Method</th>
+          <th>Handle</th>
+          <th>Submitted</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <h2>Past Winners</h2>
+    <table id="winners">
+      <thead>
+        <tr>
+          <th>Winner ID</th>
+          <th>Round</th>
+          <th>Claim ID</th>
+          <th>Method</th>
+          <th>Handle</th>
+          <th>Entered</th>
+          <th>Selected</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
   </div>
 
-  <table id="claims">
-    <thead>
-      <tr>
-        <th>ID</th>
-        <th>Method</th>
-        <th>Handle</th>
-        <th>Winner</th>
-        <th>Time</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-
   <footer>
-    © 2025 The $20 Dollar Game | Admin Panel
+    &copy; 2025 The $20 Dollar Game | Admin Panel
   </footer>
 
   <script>
-    async function openWindow() {
-      const key = document.getElementById("adminKey").value.trim();
-      if (!key) return alert("Enter admin password");
-      const res = await fetch(`/admin/open?seconds=60&admin=${key}`, { method: "POST" });
-      const data = await res.json();
-      if (data.ok) alert("✅ Claim window opened for 60 seconds");
-      else alert("❌ Failed to open window");
+    function getAdminKey() {
+      return document.getElementById("adminKey").value.trim();
     }
 
-    async function loadClaims() {
-      const key = document.getElementById("adminKey").value.trim();
-      if (!key) return alert("Enter admin password");
+    function formatDateTime(value) {
+      if (!value) {
+        return "-";
+      }
 
-      const res = await fetch(`/admin/claims?admin=${key}`);
-      if (!res.ok) return alert("Failed to fetch claims");
+      return new Date(Number(value)).toLocaleString();
+    }
 
-      const data = await res.json();
-      const tbody = document.querySelector("#claims tbody");
+    function renderRows(selector, rows, emptyMessage, columnCount, renderRow) {
+      const tbody = document.querySelector(selector);
       tbody.innerHTML = "";
 
-      data.forEach(c => {
+      if (!rows.length) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${c.id}</td>
-          <td>${c.payout_method}</td>
-          <td>${c.payout_id}</td>
-          <td>${c.is_winner ? "🏆 YES" : "—"}</td>
-          <td>${new Date(c.created_at).toLocaleTimeString()}</td>
-        `;
+        tr.innerHTML = `<td colspan="${columnCount}">${emptyMessage}</td>`;
+        tbody.appendChild(tr);
+        return;
+      }
+
+      rows.forEach((row) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = renderRow(row);
         tbody.appendChild(tr);
       });
+    }
+
+    async function openWindow() {
+      const key = getAdminKey();
+      if (!key) {
+        alert("Enter admin password");
+        return;
+      }
+
+      const res = await fetch(`/admin/open?seconds=60&admin=${encodeURIComponent(key)}`, {
+        method: "POST"
+      });
+      const data = await res.json();
+
+      if (res.ok && data.ok) {
+        alert("Claim window opened for 60 seconds.");
+        loadDashboard();
+      } else {
+        alert(data.msg || "Failed to open window.");
+      }
+    }
+
+    async function loadDashboard() {
+      const key = getAdminKey();
+      if (!key) {
+        alert("Enter admin password");
+        return;
+      }
+
+      const res = await fetch(`/admin/dashboard?admin=${encodeURIComponent(key)}`);
+      const statusEl = document.getElementById("dashboard-status");
+
+      if (!res.ok) {
+        statusEl.textContent = "Failed to fetch dashboard data.";
+        alert("Failed to fetch dashboard data.");
+        return;
+      }
+
+      const data = await res.json();
+      const remaining = Math.max(0, data.state?.remaining || 0);
+
+      statusEl.textContent = data.state?.openWindow
+        ? `Window is OPEN. ${remaining}s remaining in round ${data.state.roundId || "-"}.`
+        : `Window is CLOSED. ${data.state?.hasWinnerToday ? "A winner has already been selected today." : "No winner selected yet today."}`;
+
+      renderRows("#claims tbody", data.claims || [], "No claims yet.", 5, (claim) => `
+        <td>${claim.id}</td>
+        <td>${formatDateTime(claim.round_id)}</td>
+        <td>${claim.payout_method}</td>
+        <td>${claim.payout_id}</td>
+        <td>${formatDateTime(claim.created_at)}</td>
+      `);
+
+      renderRows("#winners tbody", data.winners || [], "No winners yet.", 7, (winner) => `
+        <td>${winner.id}</td>
+        <td>${formatDateTime(winner.round_id)}</td>
+        <td>${winner.claim_id}</td>
+        <td>${winner.payout_method}</td>
+        <td>${winner.payout_id}</td>
+        <td>${formatDateTime(winner.claim_created_at)}</td>
+        <td>${formatDateTime(winner.selected_at)}</td>
+      `);
     }
   </script>
 </body>
