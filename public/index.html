@@ -75,6 +75,97 @@
       padding: 0 20px;
     }
 
+    .sponsor-card {
+      max-width: 560px;
+      margin: 24px auto 0;
+      padding: 16px 18px;
+      border: 1px solid #e2e2e2;
+      border-radius: 16px;
+      background: #fafafa;
+      transition:
+        background 220ms ease,
+        border-color 220ms ease,
+        box-shadow 220ms ease,
+        padding 220ms ease;
+    }
+
+    .sponsor-card--teaser {
+      box-shadow: none;
+    }
+
+    .sponsor-card--featured {
+      background: #fff;
+      border-color: #d2d2d2;
+      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.06);
+      animation: sponsorReveal 420ms ease;
+    }
+
+    .sponsor-kicker {
+      margin: 0;
+      font-size: 0.72em;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #666;
+    }
+
+    .sponsor-headline {
+      margin: 10px 0 6px;
+      font-size: 1.05em;
+      font-weight: 600;
+    }
+
+    .sponsor-subline {
+      margin: 0;
+      font-size: 0.92em;
+      line-height: 1.5;
+      color: #666;
+    }
+
+    .sponsor-logo-frame {
+      width: min(100%, 320px);
+      min-height: 88px;
+      margin: 16px auto 0;
+      border: 1px solid #d7d7d7;
+      background: linear-gradient(180deg, #fff 0%, #f8f8f8 100%);
+      display: grid;
+      place-items: center;
+      padding: 18px 14px;
+      transition:
+        min-height 220ms ease,
+        width 220ms ease,
+        background 220ms ease;
+    }
+
+    .logo-placeholder {
+      line-height: 1;
+    }
+
+    .logo-placeholder-main {
+      display: block;
+      font-size: 1.55em;
+      font-weight: 800;
+      letter-spacing: 0.28em;
+    }
+
+    .logo-placeholder-sub {
+      display: block;
+      margin-top: 8px;
+      font-size: 0.78em;
+      font-weight: 600;
+      letter-spacing: 0.36em;
+      color: #777;
+    }
+
+    .sponsor-card--teaser .sponsor-headline {
+      font-size: 0.98em;
+    }
+
+    .sponsor-card--teaser .sponsor-logo-frame {
+      width: min(100%, 240px);
+      min-height: 72px;
+    }
+
     select,
     input,
     button {
@@ -127,6 +218,17 @@
       100% { transform: translateX(-100%); }
     }
 
+    @keyframes sponsorReveal {
+      0% {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
     footer {
       font-size: 0.7em;
       color: #777;
@@ -136,6 +238,21 @@
 
     .hidden {
       display: none;
+    }
+
+    @media (max-width: 640px) {
+      .sponsor-card {
+        margin-top: 20px;
+        padding: 14px 14px;
+      }
+
+      .sponsor-logo-frame {
+        width: min(100%, 270px);
+      }
+
+      .logo-placeholder-main {
+        font-size: 1.3em;
+      }
     }
   </style>
 
@@ -169,6 +286,20 @@
     <button type="submit">Enter the draw</button>
   </form>
 
+  <section id="sponsor-card" class="sponsor-card sponsor-card--teaser" aria-live="polite">
+    <p class="sponsor-kicker">Sponsor Spotlight</p>
+    <p id="sponsor-headline" class="sponsor-headline">A small sponsor credit can live here.</p>
+    <p id="sponsor-subline" class="sponsor-subline">
+      Keep it quiet on the homepage, then let it gently open up after someone enters.
+    </p>
+    <div class="sponsor-logo-frame" role="img" aria-label="Sample sponsor logo placeholder">
+      <div class="logo-placeholder">
+        <span class="logo-placeholder-main">YOUR LOGO</span>
+        <span class="logo-placeholder-sub">HERE</span>
+      </div>
+    </div>
+  </section>
+
   <div id="winner-ticker">
     <span id="ticker-text">Loading recent winners...</span>
   </div>
@@ -182,6 +313,9 @@
     const clockEl = document.getElementById("clock");
     const statusEl = document.getElementById("status");
     const formEl = document.getElementById("claim-form");
+    const sponsorCardEl = document.getElementById("sponsor-card");
+    const sponsorHeadlineEl = document.getElementById("sponsor-headline");
+    const sponsorSublineEl = document.getElementById("sponsor-subline");
 
     const losingQuotes = [
       "Success is not final, failure is not fatal: it is the courage to continue that counts. - Winston Churchill",
@@ -213,9 +347,31 @@
 
     let claimSession = null;
     let losingQuote = "";
+    let sponsorMode = "teaser";
 
     function getRandomLosingQuote() {
       return losingQuotes[Math.floor(Math.random() * losingQuotes.length)];
+    }
+
+    function setSponsorMode(mode) {
+      if (sponsorMode === mode) {
+        return;
+      }
+
+      sponsorMode = mode;
+      sponsorCardEl.classList.remove("sponsor-card--teaser", "sponsor-card--featured");
+      sponsorCardEl.classList.add(mode === "featured" ? "sponsor-card--featured" : "sponsor-card--teaser");
+
+      if (mode === "featured") {
+        sponsorHeadlineEl.textContent = "Today's game is brought to you by";
+        sponsorSublineEl.textContent =
+          "A soft sponsor moment can sit here after entry while the timer and status message stay in focus.";
+        return;
+      }
+
+      sponsorHeadlineEl.textContent = "A small sponsor credit can live here.";
+      sponsorSublineEl.textContent =
+        "Keep it quiet on the homepage, then let it gently open up after someone enters.";
     }
 
     async function fetchState() {
@@ -282,6 +438,12 @@
       const state = await fetchState();
       await refreshClaimResult();
 
+      if (claimSession?.claimId) {
+        setSponsorMode("featured");
+      } else {
+        setSponsorMode("teaser");
+      }
+
       if (state.openWindow && state.remaining > 0) {
         const mins = String(Math.floor(state.remaining / 60)).padStart(2, "0");
         const secs = String(state.remaining % 60).padStart(2, "0");
@@ -341,6 +503,7 @@
         if (!res.ok || !data.ok) {
           statusEl.textContent = data.msg || "Could not submit your entry. Please try again.";
           claimSession = null;
+          setSponsorMode("teaser");
           return;
         }
 
@@ -350,12 +513,14 @@
           resolved: false
         };
 
+        setSponsorMode("featured");
         statusEl.textContent = "You are in the draw. One winner will be chosen when the timer ends.";
         if (window.grecaptcha) {
           grecaptcha.reset();
         }
       } catch {
         claimSession = null;
+        setSponsorMode("teaser");
         statusEl.textContent = "Could not submit your entry. Please try again.";
       }
     });
