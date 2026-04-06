@@ -19,6 +19,7 @@ const PUBLIC = path.join(__dirname, "public");
 const DB_DIR = path.join(__dirname, "data");
 const DB_PATH = path.join(DB_DIR, "claims.db");
 
+app.set("trust proxy", 1);
 app.use(cors());
 app.use(express.static(PUBLIC));
 app.use(bodyParser.json());
@@ -52,6 +53,11 @@ async function initDB() {
   `);
 
   await ensureColumn("claims", "round_id", "TEXT");
+  await ensureColumn("claims", "ip_address", "TEXT");
+  await db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_claims_round_ip
+    ON claims(round_id, ip_address)
+  `);
 
   await db.exec(`
     CREATE TABLE IF NOT EXISTS past_winners (
@@ -106,6 +112,21 @@ await initDB();
 let openWindow = false;
 let windowExpiresAt = 0;
 let currentRoundId = null;
+
+function normalizeIp(ipAddress) {
+  if (!ipAddress) {
+    return "";
+  }
+
+  return String(ipAddress)
+    .split(",")[0]
+    .trim()
+    .replace(/^::ffff:/, "");
+}
+
+function getClientIp(req) {
+  return normalizeIp(req.ip || req.socket?.remoteAddress || "");
+}
 
 async function verifyCaptcha(token) {
   const secret = process.env.RECAPTCHA_SECRET;
@@ -242,19 +263,51 @@ app.post("/claim", async (req, res) => {
       return res.status(400).json({ ok: false, msg: "Missing fields" });
     }
 
+    const ipAddress = getClientIp(req);
+    if (!ipAddress) {
+      return res.status(400).json({ ok: false, msg: "Could not verify your network address" });
+    }
+
+    const existingEntry = await db.get(
+      `
+        SELECT id
+        FROM claims
+        WHERE round_id = ?
+          AND ip_address = ?
+      `,
+      [currentRoundId, ipAddress]
+    );
+    if (existingEntry) {
+      return res.status(409).json({
+        ok: false,
+        msg: "Only one entry per IP address is allowed during each draw."
+      });
+    }
+
     const capRes = await verifyCaptcha(captcha);
     if (!capRes.success) {
       return res.status(400).json({ ok: false, msg: "Captcha failed" });
     }
 
     const now = Date.now();
-    const result = await db.run(
-      `
-        INSERT INTO claims (round_id, payout_method, payout_id, created_at, is_winner)
-        VALUES (?, ?, ?, ?, 0)
-      `,
-      [currentRoundId, payout_method.trim(), payout_id.trim(), now]
-    );
+    let result;
+    try {
+      result = await db.run(
+        `
+          INSERT INTO claims (round_id, payout_method, payout_id, created_at, is_winner, ip_address)
+          VALUES (?, ?, ?, ?, 0, ?)
+        `,
+        [currentRoundId, payout_method.trim(), payout_id.trim(), now, ipAddress]
+      );
+    } catch (err) {
+      if (err?.code === "SQLITE_CONSTRAINT") {
+        return res.status(409).json({
+          ok: false,
+          msg: "Only one entry per IP address is allowed during each draw."
+        });
+      }
+      throw err;
+    }
 
     res.json({
       ok: true,
@@ -321,7 +374,7 @@ app.get("/admin/dashboard", requireAdmin, async (req, res) => {
   try {
     const claims = await db.all(
       `
-        SELECT id, round_id, payout_method, payout_id, created_at
+        SELECT id, round_id, payout_method, payout_id, created_at, ip_address
         FROM claims
         ORDER BY created_at DESC
         LIMIT 100

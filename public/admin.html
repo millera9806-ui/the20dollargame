@@ -119,6 +119,7 @@
           <th>Round</th>
           <th>Method</th>
           <th>Handle</th>
+          <th>IP</th>
           <th>Submitted</th>
         </tr>
       </thead>
@@ -220,11 +221,12 @@
         ? `Window is OPEN. ${remaining}s remaining in round ${data.state.roundId || "-"}.`
         : `Window is CLOSED. ${data.state?.hasWinnerToday ? "A winner has already been selected today." : "No winner selected yet today."}`;
 
-      renderRows("#claims tbody", data.claims || [], "No claims yet.", 5, (claim) => `
+      renderRows("#claims tbody", data.claims || [], "No claims yet.", 6, (claim) => `
         <td>${claim.id}</td>
         <td>${formatDateTime(claim.round_id)}</td>
         <td>${claim.payout_method}</td>
         <td>${claim.payout_id}</td>
+        <td>${claim.ip_address || "-"}</td>
         <td>${formatDateTime(claim.created_at)}</td>
       `);
 
