@@ -55,6 +55,49 @@
       margin: 0 auto 30px;
     }
 
+    .admin-chat {
+      max-width: 800px;
+      margin: 0 auto 24px;
+      padding: 18px 20px;
+      border: 1px solid #e3e3e3;
+      border-radius: 10px;
+      background: #fbfbfb;
+      text-align: left;
+    }
+
+    .admin-chat h2 {
+      margin: 0 0 8px;
+    }
+
+    .admin-chat p {
+      margin: 0 0 12px;
+      max-width: none;
+    }
+
+    .admin-chat-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .admin-chat-row input {
+      flex: 1;
+      min-width: 0;
+      margin: 0;
+    }
+
+    .admin-chat-row button {
+      margin: 0;
+      flex-shrink: 0;
+    }
+
+    .admin-chat-feedback {
+      min-height: 20px;
+      margin-top: 10px;
+      font-size: 0.9em;
+      color: #666;
+    }
+
     .status {
       margin: 15px auto 25px;
       padding: 12px 16px;
@@ -111,6 +154,16 @@
 
     <div id="dashboard-status" class="status">Enter your admin password to load dashboard data.</div>
 
+    <section class="admin-chat">
+      <h2>Game Master Chat</h2>
+      <p>Send a hype message to the live chat feed as <strong>Game Master</strong>.</p>
+      <div class="admin-chat-row">
+        <input id="gameMasterMessage" type="text" maxlength="120" placeholder="Drop a hype message into chat" />
+        <button onclick="sendGameMasterMessage()">Send To Chat</button>
+      </div>
+      <div id="admin-chat-feedback" class="admin-chat-feedback"></div>
+    </section>
+
     <h2>Claims</h2>
     <table id="claims">
       <thead>
@@ -150,6 +203,12 @@
   <script>
     function getAdminKey() {
       return document.getElementById("adminKey").value.trim();
+    }
+
+    function setAdminChatFeedback(message, isError = false) {
+      const feedbackEl = document.getElementById("admin-chat-feedback");
+      feedbackEl.textContent = message;
+      feedbackEl.style.color = isError ? "#b53a1d" : "#666";
     }
 
     function formatDateTime(value) {
@@ -198,6 +257,37 @@
       }
     }
 
+    async function sendGameMasterMessage() {
+      const key = getAdminKey();
+      const inputEl = document.getElementById("gameMasterMessage");
+      const message = inputEl.value.trim();
+
+      if (!key) {
+        alert("Enter admin password");
+        return;
+      }
+
+      if (!message) {
+        setAdminChatFeedback("Type a message before sending.", true);
+        return;
+      }
+
+      const res = await fetch(`/admin/chat?admin=${encodeURIComponent(key)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message })
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        setAdminChatFeedback(data.msg || "Could not send Game Master message.", true);
+        return;
+      }
+
+      inputEl.value = "";
+      setAdminChatFeedback("Game Master message sent.");
+    }
+
     async function loadDashboard() {
       const key = getAdminKey();
       if (!key) {
@@ -240,6 +330,13 @@
         <td>${formatDateTime(winner.selected_at)}</td>
       `);
     }
+
+    document.getElementById("gameMasterMessage").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        sendGameMasterMessage();
+      }
+    });
   </script>
 </body>
 </html>

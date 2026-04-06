@@ -25,24 +25,118 @@ const CHAT_MAX_POSTS_PER_MINUTE = 6;
 const CHAT_MESSAGE_RETENTION_MS = 24 * 60 * 60 * 1000;
 const CHAT_STALE_RATE_LIMIT_MS = 10 * 60 * 1000;
 const DEFAULT_CHAT_NICKNAME = "potential winner";
-const BLOCKED_CHAT_TERMS = [
+const GAME_MASTER_CHAT_NICKNAME = "Game Master";
+const CHAT_BLOCK_TERMS = [
   "fuck",
+  "fuk",
+  "fck",
+  "phuck",
+  "f*ck",
+  "f u c k",
   "shit",
+  "sh1t",
+  "sht",
+  "sh!t",
   "bitch",
-  "cunt",
+  "btch",
+  "biatch",
+  "asshole",
+  "ahole",
+  "a**hole",
+  "dick",
+  "dickhead",
+  "cock",
+  "pussy",
+  "cum",
+  "porn",
+  "sex",
+  "nudes",
+  "onlyfans",
   "nigger",
+  "n1gger",
   "nigga",
   "faggot",
+  "fag",
   "retard",
-  "slut",
-  "whore",
-  "asshole",
-  "dickhead",
-  "killyourself",
-  "suicide",
+  "tranny",
+  "kill yourself",
+  "kys",
+  "die",
+  "hang yourself",
+  "rape",
+  "raped",
   "rapist",
-  "rape"
+  "http",
+  "https",
+  "telegram",
+  "whatsapp",
+  "signal",
+  "dm me",
+  "message me",
+  "text me",
+  "send nudes",
+  "free nudes"
 ];
+const CHAT_FLAG_TERMS = [
+  "cashapp",
+  "venmo",
+  "paypal",
+  "zelle",
+  "send me money",
+  "send again",
+  "refund me",
+  "i didnt get paid",
+  "you owe me",
+  "i won yesterday",
+  "this is a scam",
+  "scam site",
+  "fake giveaway",
+  "click here",
+  "claim now",
+  "limited offer",
+  "verify account",
+  "free money",
+  "easy money",
+  "guaranteed win",
+  "promo code",
+  "referral link",
+  "contact me",
+  "reach me",
+  "hit me up",
+  "email me",
+  "call me"
+];
+const CHAT_TOXIC_TERMS = [
+  "you suck",
+  "loser",
+  "idiot",
+  "stupid",
+  "dumb",
+  "shut up",
+  "trash",
+  "garbage",
+  "clown",
+  "hate you",
+  "go away"
+];
+const CHAT_SENSITIVE_TERMS = [
+  "ssn",
+  "social security",
+  "routing number",
+  "account number",
+  "credit card",
+  "debit card",
+  "cvv",
+  "@gmail.com",
+  "@yahoo.com",
+  "@hotmail.com"
+];
+const CHAT_PATTERNS = {
+  phone: /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/i,
+  email: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}/i,
+  url: /(https?:\/\/|www\.)\S+/i,
+  domain: /(?:^|\s)[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|xyz|ru|tk|gg)\b/i
+};
 const chatRateLimiter = new Map();
 
 app.set("trust proxy", 1);
@@ -107,15 +201,21 @@ async function initDB() {
       ip_address TEXT NOT NULL
     );
   `);
+  await ensureColumn("chat_messages", "sender_role", "TEXT DEFAULT 'player'");
 
   await db.exec(`
     CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at
     ON chat_messages(created_at DESC)
   `);
 
-  await db.run("UPDATE chat_messages SET nickname = ? WHERE nickname <> ?", [
+  await db.run("UPDATE chat_messages SET sender_role = 'player' WHERE sender_role IS NULL OR sender_role = ''");
+  await db.run("UPDATE chat_messages SET nickname = ? WHERE sender_role = 'player' AND nickname <> ?", [
     DEFAULT_CHAT_NICKNAME,
     DEFAULT_CHAT_NICKNAME
+  ]);
+  await db.run("UPDATE chat_messages SET nickname = ? WHERE sender_role = 'game_master' AND nickname <> ?", [
+    GAME_MASTER_CHAT_NICKNAME,
+    GAME_MASTER_CHAT_NICKNAME
   ]);
 
   await db.run(
@@ -183,7 +283,7 @@ function sanitizeChatMessage(value) {
     .slice(0, CHAT_MAX_MESSAGE_LENGTH);
 }
 
-function normalizeChatForModeration(value) {
+function normalizeChatForPhraseMatch(value) {
   const substitutions = {
     "0": "o",
     "1": "i",
@@ -199,7 +299,23 @@ function normalizeChatForModeration(value) {
   return sanitizeChatMessage(value)
     .toLowerCase()
     .replace(/[013457@$!]/g, (char) => substitutions[char] || char)
-    .replace(/[^a-z0-9]/g, "");
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeChatForCompactMatch(value) {
+  return normalizeChatForPhraseMatch(value).replace(/\s+/g, "");
+}
+
+function matchesChatTerm(phraseNormalizedMessage, compactNormalizedMessage, term) {
+  const phraseNormalizedTerm = normalizeChatForPhraseMatch(term);
+  const compactNormalizedTerm = normalizeChatForCompactMatch(term);
+
+  return (
+    (phraseNormalizedTerm && phraseNormalizedMessage.includes(phraseNormalizedTerm)) ||
+    (compactNormalizedTerm && compactNormalizedMessage.includes(compactNormalizedTerm))
+  );
 }
 
 function getChatModerationMessage(message) {
@@ -207,15 +323,15 @@ function getChatModerationMessage(message) {
     return "Type a message before sending.";
   }
 
-  if (/(https?:\/\/|www\.|(?:[a-z0-9-]+\.)+(?:com|net|org|gg|io|co|ly|app|me|tv|xyz)\b)/i.test(message)) {
+  if (CHAT_PATTERNS.url.test(message) || CHAT_PATTERNS.domain.test(message)) {
     return "Links are not allowed in chat.";
   }
 
-  if (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(message)) {
+  if (CHAT_PATTERNS.email.test(message)) {
     return "Contact information is not allowed in chat.";
   }
 
-  if (/(?:\+?\d[\d .-]{7,}\d)/.test(message)) {
+  if (CHAT_PATTERNS.phone.test(message)) {
     return "Contact information is not allowed in chat.";
   }
 
@@ -223,9 +339,23 @@ function getChatModerationMessage(message) {
     return "Please avoid spammy messages.";
   }
 
-  const normalized = normalizeChatForModeration(message);
-  if (BLOCKED_CHAT_TERMS.some((term) => normalized.includes(term))) {
+  const phraseNormalizedMessage = normalizeChatForPhraseMatch(message);
+  const compactNormalizedMessage = normalizeChatForCompactMatch(message);
+
+  if (CHAT_BLOCK_TERMS.some((term) => matchesChatTerm(phraseNormalizedMessage, compactNormalizedMessage, term))) {
     return "Keep chat clean for everyone.";
+  }
+
+  if (CHAT_SENSITIVE_TERMS.some((term) => matchesChatTerm(phraseNormalizedMessage, compactNormalizedMessage, term))) {
+    return "Personal information is not allowed in chat.";
+  }
+
+  if (CHAT_FLAG_TERMS.some((term) => matchesChatTerm(phraseNormalizedMessage, compactNormalizedMessage, term))) {
+    return "Payment requests, scam language, and off-platform contact are not allowed in chat.";
+  }
+
+  if (CHAT_TOXIC_TERMS.some((term) => matchesChatTerm(phraseNormalizedMessage, compactNormalizedMessage, term))) {
+    return "Keep chat respectful.";
   }
 
   return null;
@@ -448,7 +578,7 @@ app.get("/chat/messages", async (req, res) => {
     if (afterId > 0) {
       messages = await db.all(
         `
-          SELECT id, nickname, message, created_at
+          SELECT id, nickname, message, created_at, sender_role
           FROM chat_messages
           WHERE id > ?
           ORDER BY id ASC
@@ -458,7 +588,7 @@ app.get("/chat/messages", async (req, res) => {
       );
     } else {
       messages = await db.all(`
-        SELECT id, nickname, message, created_at
+        SELECT id, nickname, message, created_at, sender_role
         FROM chat_messages
         ORDER BY id DESC
         LIMIT ${CHAT_FETCH_LIMIT}
@@ -506,8 +636,8 @@ app.post("/chat/messages", async (req, res) => {
     const createdAt = Date.now();
     const result = await db.run(
       `
-        INSERT INTO chat_messages (nickname, message, created_at, ip_address)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO chat_messages (nickname, message, created_at, ip_address, sender_role)
+        VALUES (?, ?, ?, ?, 'player')
       `,
       [nickname, message, createdAt, ipAddress]
     );
@@ -518,11 +648,44 @@ app.post("/chat/messages", async (req, res) => {
         id: result.lastID,
         nickname,
         message,
-        created_at: createdAt
+        created_at: createdAt,
+        sender_role: "player"
       }
     });
   } catch (err) {
     console.error("Chat post error:", err);
+    res.status(500).json({ ok: false, msg: "Server error" });
+  }
+});
+
+app.post("/admin/chat", requireAdmin, async (req, res) => {
+  try {
+    const message = sanitizeChatMessage(req.body.message);
+    if (!message) {
+      return res.status(400).json({ ok: false, msg: "Type a message before sending." });
+    }
+
+    const createdAt = Date.now();
+    const result = await db.run(
+      `
+        INSERT INTO chat_messages (nickname, message, created_at, ip_address, sender_role)
+        VALUES (?, ?, ?, ?, 'game_master')
+      `,
+      [GAME_MASTER_CHAT_NICKNAME, message, createdAt, getClientIp(req) || "admin"]
+    );
+
+    res.json({
+      ok: true,
+      message: {
+        id: result.lastID,
+        nickname: GAME_MASTER_CHAT_NICKNAME,
+        message,
+        created_at: createdAt,
+        sender_role: "game_master"
+      }
+    });
+  } catch (err) {
+    console.error("Admin chat post error:", err);
     res.status(500).json({ ok: false, msg: "Server error" });
   }
 });
