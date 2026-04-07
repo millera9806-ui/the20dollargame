@@ -51,37 +51,81 @@
 
     .nav .chat-toggle {
       width: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
       margin: 0 6px 0 0;
-      padding: 8px 14px;
+      padding: 9px 16px 9px 14px;
       border: 1px solid #d8d8d8;
       border-radius: 999px;
       background: #fff;
       color: #000;
-      font-size: 0.92em;
+      font-size: 0.84em;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
       line-height: 1;
       cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
       transition:
-        background-color 180ms ease,
         border-color 180ms ease,
-        color 180ms ease,
+        box-shadow 180ms ease,
+        transform 180ms ease,
         opacity 180ms ease;
     }
 
     .nav .chat-toggle:hover {
-      background: #111;
-      border-color: #111;
-      color: #fff;
+      border-color: #bdbdbd;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+      transform: translateY(-1px);
     }
 
     .nav .chat-toggle.is-open {
-      background: #111;
       border-color: #111;
-      color: #fff;
+      box-shadow: 0 10px 22px rgba(0, 0, 0, 0.1);
+    }
+
+    .nav .chat-toggle-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #ef2b2d;
+      box-shadow: 0 0 0 0 rgba(239, 43, 45, 0.55);
+      flex: none;
+      animation: livePulse 1600ms ease-out infinite;
+    }
+
+    .nav .chat-toggle-label {
+      white-space: nowrap;
     }
 
     .nav .chat-toggle:disabled {
       opacity: 0.42;
       cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .nav .chat-toggle:disabled .chat-toggle-dot {
+      animation: none;
+      box-shadow: none;
+    }
+
+    @keyframes livePulse {
+      0% {
+        transform: scale(0.92);
+        box-shadow: 0 0 0 0 rgba(239, 43, 45, 0.5);
+      }
+
+      65% {
+        transform: scale(1);
+        box-shadow: 0 0 0 10px rgba(239, 43, 45, 0);
+      }
+
+      100% {
+        transform: scale(0.92);
+        box-shadow: 0 0 0 0 rgba(239, 43, 45, 0);
+      }
     }
 
     h1 {
@@ -578,8 +622,15 @@
       }
 
       .nav .chat-toggle {
-        padding: 8px 12px;
+        gap: 8px;
+        padding: 8px 13px 8px 11px;
         margin-right: 0;
+        font-size: 0.72em;
+      }
+
+      .nav .chat-toggle-dot {
+        width: 10px;
+        height: 10px;
       }
 
       h1 {
@@ -800,9 +851,19 @@
   <script async src="https://www.google.com/recaptcha/api.js"></script>
 </head>
 
-<body>
+  <body>
   <div class="nav">
-    <button id="chat-toggle" class="chat-toggle" type="button" aria-controls="chat-panel" aria-expanded="false">Chat</button>
+    <button
+      id="chat-toggle"
+      class="chat-toggle"
+      type="button"
+      aria-controls="chat-panel"
+      aria-expanded="false"
+      aria-label="Open live chat"
+    >
+      <span class="chat-toggle-dot" aria-hidden="true"></span>
+      <span class="chat-toggle-label">Live Chat</span>
+    </button>
     <a href="faq.html">FAQ</a>
     <a href="contact.html">Contact</a>
   </div>
@@ -966,9 +1027,9 @@
     }
 
     function refreshChatToggle() {
-      chatToggleEl.textContent = chatToggleEl.disabled ? "Chat" : chatOpen ? "Chat ^" : "Chat v";
       chatToggleEl.classList.toggle("is-open", chatOpen);
       chatToggleEl.setAttribute("aria-expanded", chatOpen ? "true" : "false");
+      chatToggleEl.setAttribute("aria-label", chatOpen ? "Close live chat" : "Open live chat");
     }
 
     function renderChatEmpty(message) {
