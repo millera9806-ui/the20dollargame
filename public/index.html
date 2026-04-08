@@ -7,20 +7,20 @@
 
   <meta
     name="description"
-    content="The $20 Dollar Game - one winner every day. No gimmicks. Real cash. Just be ready."
+    content="The $20 Dollar Game - live daily at 7 PM PST. One 2-minute draw. One random winner. Real cash."
   />
   <meta
     name="keywords"
     content="$20 game, daily giveaway, win money, cash app, venmo, paypal, free cash, daily contest"
   />
   <meta property="og:title" content="The $20 Dollar Game" />
-  <meta property="og:description" content="One winner every day. No gimmicks. Real cash." />
+  <meta property="og:description" content="Live daily at 7 PM PST. One 2-minute draw. One random winner. Real cash." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://www.the20dollargame.com" />
   <meta property="og:image" content="https://www.the20dollargame.com/favicon.png" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="The $20 Dollar Game" />
-  <meta name="twitter:description" content="One winner every day. No gimmicks. Real cash." />
+  <meta name="twitter:description" content="Live daily at 7 PM PST. One 2-minute draw. One random winner. Real cash." />
 
   <link rel="icon" type="image/png" href="favicon.png" />
 
@@ -126,6 +126,35 @@
         transform: scale(0.92);
         box-shadow: 0 0 0 0 rgba(239, 43, 45, 0);
       }
+    }
+
+    @keyframes liveChatNudge {
+      0%,
+      100% {
+        transform: translateY(0) rotate(0deg);
+      }
+
+      16% {
+        transform: translateY(-1px) rotate(-2deg);
+      }
+
+      32% {
+        transform: translateY(-1px) rotate(2deg);
+      }
+
+      48% {
+        transform: translateY(0) rotate(-1deg);
+      }
+
+      64% {
+        transform: translateY(0) rotate(1deg);
+      }
+    }
+
+    body.chat-attention-active .nav .chat-toggle {
+      animation: liveChatNudge 780ms ease-in-out 4;
+      border-color: #111;
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
     }
 
     h1 {
@@ -358,6 +387,24 @@
       color: #777;
       margin: 3em 0 4em 0;
       line-height: 1.4em;
+    }
+
+    footer a {
+      color: #555;
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    .footer-links {
+      margin-top: 10px;
+      font-size: 1em;
+    }
+
+    .footer-links a + a {
+      margin-left: 12px;
     }
 
     .hidden {
@@ -870,8 +917,8 @@
 
   <h1>The $20 Dollar Game</h1>
   <h2>
-    Check in daily from 6-9 PM PST for your shot at $20.<br />
-    One 60-second drop. One random winner. Real cash.
+    Check in daily at 7 PM PST for your shot at $20.<br />
+    One 2-minute draw. One random winner. Real cash.
   </h2>
 
   <div id="clock" class="hidden">01:00</div>
@@ -886,7 +933,7 @@
     </select>
     <input id="handle" type="text" placeholder="@handle / email / $cashtag" required />
     <div class="g-recaptcha" data-sitekey="6LeKj_crAAAAAHt5YPYgUc3DSzTyVlkNdFKyk-3Z"></div>
-    <button type="submit">Enter the draw</button>
+    <button type="submit">Gimme that $20</button>
   </form>
 
   <section id="sponsor-card" class="sponsor-card sponsor-card--teaser" aria-live="polite">
@@ -936,6 +983,10 @@
   <footer>
     &copy; 2025 The $20 Dollar Game - No purchase necessary - Void where prohibited<br />
     Support the game: <strong>$the20dollargame</strong> | the20dollargame@gmail.com
+    <div class="footer-links">
+      <a href="privacy.html">Privacy Policy</a>
+      <a href="rules.html">Official Rules</a>
+    </div>
   </footer>
 
   <script>
@@ -992,6 +1043,7 @@
     let resultRedirectTimer = null;
     let confettiCleanupTimer = null;
     let sponsorSpotlightTimer = null;
+    let chatAttentionTimer = null;
     let chatOpen = false;
     let chatLastMessageId = 0;
     let chatPollTimer = null;
@@ -1030,6 +1082,28 @@
       chatToggleEl.classList.toggle("is-open", chatOpen);
       chatToggleEl.setAttribute("aria-expanded", chatOpen ? "true" : "false");
       chatToggleEl.setAttribute("aria-label", chatOpen ? "Close live chat" : "Open live chat");
+    }
+
+    function clearChatAttention() {
+      if (chatAttentionTimer) {
+        window.clearTimeout(chatAttentionTimer);
+        chatAttentionTimer = null;
+      }
+
+      document.body.classList.remove("chat-attention-active");
+    }
+
+    function triggerChatAttention() {
+      if (isMobileViewport() || chatToggleEl.disabled || chatOpen) {
+        return;
+      }
+
+      clearChatAttention();
+      document.body.classList.add("chat-attention-active");
+      chatAttentionTimer = window.setTimeout(() => {
+        document.body.classList.remove("chat-attention-active");
+        chatAttentionTimer = null;
+      }, 3600);
     }
 
     function renderChatEmpty(message) {
@@ -1185,6 +1259,7 @@
         return;
       }
 
+      clearChatAttention();
       chatOpen = true;
       chatPanelEl.classList.add("is-open");
       chatPanelEl.setAttribute("aria-hidden", "false");
@@ -1274,6 +1349,7 @@
 
       if (phase !== "mobile-entered") {
         clearSponsorSpotlight();
+        clearChatAttention();
       }
     }
 
@@ -1314,6 +1390,14 @@
         document.body.classList.remove("sponsor-spotlight-active");
         sponsorSpotlightTimer = null;
       }, 2600);
+    }
+
+    function getEnteredStatusMessage() {
+      if (isMobileViewport()) {
+        return "Fingers crossed. You're in the draw. One winner will be chosen when the timer ends.\nCheck out today's sponsor while the timer runs.";
+      }
+
+      return "Fingers crossed. You're in the draw. One winner will be chosen when the timer ends.\nCheck out today's sponsor and chat with other potential winners.";
     }
 
     function launchConfetti() {
@@ -1440,7 +1524,7 @@
       }
 
       const playerCount = claimSession.totalPlayers || 0;
-      return `${losingQuote} ${playerCount} players played the game. Come back tomorrow from 6-9 PM PST and try again.`;
+      return `${losingQuote} ${playerCount} users played the game. Come back tomorrow at 7 PM PST and try again.`;
     }
 
     function getClosedDayMessage(state) {
@@ -1449,10 +1533,10 @@
       const winnerHandle = state.winnerPayoutId || "today's winner";
 
       if (state.hasWinnerToday && state.winnerPayoutId) {
-        return `Today's draw is over. ${playerCount} ${playerLabel} played the game and ${winnerHandle} walked away with $20. Come back tomorrow from 6-9 PM PST for the next drop.`;
+        return `Today's draw is over. ${playerCount} ${playerLabel} played the game and ${winnerHandle} walked away with $20. Come back tomorrow at 7 PM PST for the next drop.`;
       }
 
-      return "Today's draw is over. Come back tomorrow from 6-9 PM PST for the next drop.";
+      return "Today's draw is over. Come back tomorrow at 7 PM PST for the next drop.";
     }
 
     async function updateUI() {
@@ -1475,14 +1559,15 @@
 
         if (claimSession?.claimId) {
           formEl.classList.add("hidden");
-          statusEl.textContent = "Fingers crossed. You're in the draw. One winner will be chosen when the timer ends.";
+          statusEl.textContent = getEnteredStatusMessage();
         } else {
           formEl.classList.remove("hidden");
-          statusEl.textContent = "The drop is live. Enter before the 60-second window closes.";
+          statusEl.textContent = "The draw is live. Enter before the 2-minute window closes.";
         }
         return;
       }
 
+      clearChatAttention();
       clockEl.classList.add("hidden");
       formEl.classList.add("hidden");
 
@@ -1506,7 +1591,7 @@
         return;
       }
 
-      statusEl.textContent = "The daily draw opens once between 6-9 PM PST. Check back and be ready.";
+      statusEl.textContent = "The daily draw goes live at 7 PM PST. Check back and be ready.";
     }
 
     formEl.addEventListener("submit", async (event) => {
@@ -1519,6 +1604,7 @@
       formEl.classList.add("hidden");
       statusEl.textContent = "Submitting your entry...";
       losingQuote = "";
+      clearChatAttention();
 
       try {
         const res = await fetch("/claim", {
@@ -1551,7 +1637,8 @@
         setSponsorMode("featured");
         setMobilePhase("mobile-entered");
         triggerSponsorSpotlight();
-        statusEl.textContent = "Fingers crossed. You're in the draw. One winner will be chosen when the timer ends.";
+        triggerChatAttention();
+        statusEl.textContent = getEnteredStatusMessage();
         if (window.grecaptcha) {
           grecaptcha.reset();
         }
@@ -1559,6 +1646,7 @@
         claimSession = null;
         setSponsorMode("teaser");
         setMobilePhase(clockEl.classList.contains("hidden") ? "mobile-home" : "mobile-live");
+        clearChatAttention();
         statusEl.textContent = "Could not submit your entry. Please try again.";
       }
     });

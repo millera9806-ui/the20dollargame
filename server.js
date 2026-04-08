@@ -18,6 +18,7 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, "public");
 const DB_DIR = path.join(__dirname, "data");
 const DB_PATH = path.join(DB_DIR, "claims.db");
+const DEFAULT_DRAW_WINDOW_SECONDS = 120;
 const CHAT_FETCH_LIMIT = 60;
 const CHAT_MAX_MESSAGE_LENGTH = 120;
 const CHAT_SLOW_MODE_MS = 8000;
@@ -854,7 +855,7 @@ app.post("/admin/open", requireAdmin, async (req, res) => {
       return res.status(400).json({ ok: false, msg: "A winner has already been selected today" });
     }
 
-    const seconds = parseInt(req.query.seconds || "60", 10);
+    const seconds = parseInt(req.query.seconds || String(DEFAULT_DRAW_WINDOW_SECONDS), 10);
     const roundId = String(Date.now());
 
     openWindow = true;

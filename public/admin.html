@@ -142,13 +142,13 @@
   <div class="panel">
     <h1>Admin Dashboard</h1>
     <p>
-      Open the daily 60-second draw window when you are ready, review all player claims,
+      Open the daily 2-minute draw window when you are ready, review all player claims,
       and keep a separate history of past winners.
     </p>
 
     <div>
       <input type="password" id="adminKey" placeholder="Admin password" />
-      <button onclick="openWindow()">Open 60s Draw Window</button>
+      <button onclick="openWindow()">Open 2-Min Draw Window</button>
       <button onclick="loadDashboard()">Refresh Dashboard</button>
     </div>
 
@@ -244,13 +244,13 @@
         return;
       }
 
-      const res = await fetch(`/admin/open?seconds=60&admin=${encodeURIComponent(key)}`, {
+      const res = await fetch(`/admin/open?seconds=120&admin=${encodeURIComponent(key)}`, {
         method: "POST"
       });
       const data = await res.json();
 
       if (res.ok && data.ok) {
-        alert("Claim window opened for 60 seconds.");
+        alert("Claim window opened for 2 minutes.");
         loadDashboard();
       } else {
         alert(data.msg || "Failed to open window.");
