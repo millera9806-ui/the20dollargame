@@ -7,20 +7,20 @@
 
   <meta
     name="description"
-    content="The $20 Dollar Game - live daily at 7 PM PST. One 2-minute draw. One random winner. Real cash."
+    content="The $20 Dollar Game - live daily at 7 PM PT. One 2-minute draw. One random winner. Real cash."
   />
   <meta
     name="keywords"
     content="$20 game, daily giveaway, win money, cash app, venmo, paypal, free cash, daily contest"
   />
   <meta property="og:title" content="The $20 Dollar Game" />
-  <meta property="og:description" content="Live daily at 7 PM PST. One 2-minute draw. One random winner. Real cash." />
+  <meta property="og:description" content="Live daily at 7 PM PT. One 2-minute draw. One random winner. Real cash." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://www.the20dollargame.com" />
   <meta property="og:image" content="https://www.the20dollargame.com/favicon-v2.png" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="The $20 Dollar Game" />
-  <meta name="twitter:description" content="Live daily at 7 PM PST. One 2-minute draw. One random winner. Real cash." />
+  <meta name="twitter:description" content="Live daily at 7 PM PT. One 2-minute draw. One random winner. Real cash." />
 
   <script
     async
@@ -181,6 +181,11 @@
       font-size: 3em;
       font-weight: 700;
       margin-top: 1em;
+    }
+
+    #clock.clock--countdown {
+      font-size: clamp(2.6rem, 8vw, 4.6rem);
+      letter-spacing: -0.04em;
     }
 
     #status {
@@ -708,6 +713,11 @@
         letter-spacing: -0.04em;
       }
 
+      #clock.clock--countdown {
+        font-size: clamp(3rem, 15vw, 4.6rem);
+        letter-spacing: -0.05em;
+      }
+
       #status {
         max-width: 340px;
         margin-top: 14px;
@@ -924,7 +934,7 @@
 
   <h1>The $20 Dollar Game</h1>
   <h2>
-    Check in daily at 7 PM PST for your shot at $20.<br />
+    Check in daily at 7 PM PT for your shot at $20.<br />
     One 2-minute draw. One random winner. Real cash.
   </h2>
 
@@ -1051,6 +1061,8 @@
     let confettiCleanupTimer = null;
     let sponsorSpotlightTimer = null;
     let chatAttentionTimer = null;
+    let clockMode = "hidden";
+    let clockTargetAt = 0;
     let chatOpen = false;
     let chatLastMessageId = 0;
     let chatPollTimer = null;
@@ -1075,6 +1087,56 @@
 
     function setChatStatus(message) {
       chatStatusEl.textContent = message;
+    }
+
+    function formatClockValue(totalSeconds, mode) {
+      const safeSeconds = Math.max(0, totalSeconds);
+
+      if (mode === "daily") {
+        const hours = String(Math.floor(safeSeconds / 3600)).padStart(2, "0");
+        const minutes = String(Math.floor((safeSeconds % 3600) / 60)).padStart(2, "0");
+        const seconds = String(safeSeconds % 60).padStart(2, "0");
+        return `${hours}:${minutes}:${seconds}`;
+      }
+
+      const minutes = String(Math.floor(safeSeconds / 60)).padStart(2, "0");
+      const seconds = String(safeSeconds % 60).padStart(2, "0");
+      return `${minutes}:${seconds}`;
+    }
+
+    function syncClock(mode, remainingSeconds) {
+      if (!mode || remainingSeconds <= 0) {
+        clockMode = "hidden";
+        clockTargetAt = 0;
+        clockEl.classList.add("hidden");
+        clockEl.classList.remove("clock--countdown");
+        return;
+      }
+
+      clockMode = mode;
+      clockTargetAt = Date.now() + remainingSeconds * 1000;
+      renderClock();
+    }
+
+    function renderClock() {
+      if (clockMode === "hidden" || !clockTargetAt) {
+        clockEl.classList.add("hidden");
+        clockEl.classList.remove("clock--countdown");
+        return;
+      }
+
+      const remainingSeconds = Math.max(0, Math.ceil((clockTargetAt - Date.now()) / 1000));
+      if (clockMode === "daily" && remainingSeconds <= 0) {
+        clockMode = "hidden";
+        clockTargetAt = 0;
+        clockEl.classList.add("hidden");
+        clockEl.classList.remove("clock--countdown");
+        return;
+      }
+
+      clockEl.textContent = formatClockValue(remainingSeconds, clockMode);
+      clockEl.classList.toggle("clock--countdown", clockMode === "daily");
+      clockEl.classList.remove("hidden");
     }
 
     function setChatFeedback(message, tone = "") {
@@ -1531,7 +1593,7 @@
       }
 
       const playerCount = claimSession.totalPlayers || 0;
-      return `${losingQuote} ${playerCount} users played the game. Come back tomorrow at 7 PM PST and try again.`;
+      return `${losingQuote} ${playerCount} users played the game. Come back tomorrow at 7 PM PT and try again.`;
     }
 
     function getClosedDayMessage(state) {
@@ -1540,10 +1602,18 @@
       const winnerHandle = state.winnerPayoutId || "today's winner";
 
       if (state.hasWinnerToday && state.winnerPayoutId) {
-        return `Today's draw is over. ${playerCount} ${playerLabel} played the game and ${winnerHandle} walked away with $20. Come back tomorrow at 7 PM PST for the next drop.`;
+        return `Today's draw is over. ${playerCount} ${playerLabel} played the game and ${winnerHandle} walked away with $20. Come back tomorrow at 7 PM PT for the next drop.`;
       }
 
-      return "Today's draw is over. Come back tomorrow at 7 PM PST for the next drop.";
+      return "Today's draw is over. Come back tomorrow at 7 PM PT for the next drop.";
+    }
+
+    function getPacificLabel(state) {
+      return state?.timeZoneLabel || "PT";
+    }
+
+    function getPreDrawStatusMessage(state) {
+      return `Countdown to tonight's 7:00 PM ${getPacificLabel(state)} draw.`;
     }
 
     async function updateUI() {
@@ -1559,10 +1629,7 @@
 
       if (state.openWindow && state.remaining > 0) {
         setMobilePhase(claimSession?.claimId ? "mobile-entered" : "mobile-live");
-        const mins = String(Math.floor(state.remaining / 60)).padStart(2, "0");
-        const secs = String(state.remaining % 60).padStart(2, "0");
-        clockEl.textContent = `${mins}:${secs}`;
-        clockEl.classList.remove("hidden");
+        syncClock("live", state.remaining);
 
         if (claimSession?.claimId) {
           formEl.classList.add("hidden");
@@ -1575,7 +1642,7 @@
       }
 
       clearChatAttention();
-      clockEl.classList.add("hidden");
+      syncClock("hidden", 0);
       formEl.classList.add("hidden");
 
       if (claimSession?.claimId && !claimSession.resolved) {
@@ -1598,7 +1665,18 @@
         return;
       }
 
-      statusEl.textContent = "The daily draw goes live at 7 PM PST. Check back and be ready.";
+      if (state.showDailyCountdown && state.countdownToDrawSeconds > 0) {
+        syncClock("daily", state.countdownToDrawSeconds);
+        statusEl.textContent = getPreDrawStatusMessage(state);
+        return;
+      }
+
+      if (state.isPastDailyDrawTime) {
+        statusEl.textContent = `Tonight's 7 PM ${getPacificLabel(state)} draw should be opening shortly.`;
+        return;
+      }
+
+      statusEl.textContent = "The daily draw goes live at 7 PM PT. Check back and be ready.";
     }
 
     formEl.addEventListener("submit", async (event) => {
@@ -1702,6 +1780,7 @@
       }
     });
 
+    setInterval(renderClock, 1000);
     setInterval(updateUI, 2000);
     updateUI();
     loadTicker();

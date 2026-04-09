@@ -18,6 +18,10 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, "public");
 const DB_DIR = path.join(__dirname, "data");
 const DB_PATH = path.join(DB_DIR, "claims.db");
+const PACIFIC_TIME_ZONE = "America/Los_Angeles";
+const DAILY_DRAW_HOUR = 19;
+const DAILY_DRAW_MINUTE = 0;
+const DAILY_COUNTDOWN_START_SECONDS = 60;
 const DEFAULT_DRAW_WINDOW_SECONDS = 120;
 const CHAT_FETCH_LIMIT = 60;
 const CHAT_MAX_MESSAGE_LENGTH = 120;
@@ -260,6 +264,27 @@ let openWindow = false;
 let windowExpiresAt = 0;
 let currentRoundId = null;
 
+const pacificDateTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: PACIFIC_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false
+});
+
+const pacificTimeZoneFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: PACIFIC_TIME_ZONE,
+  timeZoneName: "short"
+});
+
+const pacificOffsetFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: PACIFIC_TIME_ZONE,
+  timeZoneName: "shortOffset"
+});
+
 function normalizeIp(ipAddress) {
   if (!ipAddress) {
     return "";
@@ -447,11 +472,98 @@ function requireAdmin(req, res, next) {
   return res.status(401).json({ ok: false, msg: "unauthorized" });
 }
 
-function pacificMidnightMs() {
-  const now = new Date();
-  const pacificNow = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
-  pacificNow.setHours(0, 0, 0, 0);
-  return pacificNow.getTime();
+function getPacificDateTimeParts(date = new Date()) {
+  const values = {};
+
+  for (const part of pacificDateTimeFormatter.formatToParts(date)) {
+    if (part.type !== "literal") {
+      values[part.type] = part.value;
+    }
+  }
+
+  return {
+    year: Number.parseInt(values.year, 10),
+    month: Number.parseInt(values.month, 10),
+    day: Number.parseInt(values.day, 10),
+    hour: Number.parseInt(values.hour, 10),
+    minute: Number.parseInt(values.minute, 10),
+    second: Number.parseInt(values.second, 10)
+  };
+}
+
+function getTimeZoneOffsetMinutes(timeZoneFormatter, date = new Date()) {
+  const offsetValue = timeZoneFormatter
+    .formatToParts(date)
+    .find((part) => part.type === "timeZoneName")?.value;
+
+  if (!offsetValue || offsetValue === "GMT") {
+    return 0;
+  }
+
+  const match = offsetValue.match(/^GMT([+-])(\d{1,2})(?::?(\d{2}))?$/);
+  if (!match) {
+    return 0;
+  }
+
+  const sign = match[1] === "-" ? -1 : 1;
+  const hours = Number.parseInt(match[2], 10);
+  const minutes = Number.parseInt(match[3] || "0", 10);
+  return sign * (hours * 60 + minutes);
+}
+
+function getPacificTimeZoneLabel(date = new Date()) {
+  return (
+    pacificTimeZoneFormatter.formatToParts(date).find((part) => part.type === "timeZoneName")?.value ||
+    "PT"
+  );
+}
+
+function pacificLocalDateTimeToMs({ year, month, day, hour = 0, minute = 0, second = 0 }) {
+  let guess = Date.UTC(year, month - 1, day, hour, minute, second);
+
+  for (let i = 0; i < 4; i += 1) {
+    const offsetMinutes = getTimeZoneOffsetMinutes(pacificOffsetFormatter, new Date(guess));
+    guess = Date.UTC(year, month - 1, day, hour, minute, second) - offsetMinutes * 60 * 1000;
+  }
+
+  return guess;
+}
+
+function pacificMidnightMs(date = new Date()) {
+  const pacificNow = getPacificDateTimeParts(date);
+  return pacificLocalDateTimeToMs({
+    year: pacificNow.year,
+    month: pacificNow.month,
+    day: pacificNow.day,
+    hour: 0,
+    minute: 0,
+    second: 0
+  });
+}
+
+function getDailyCountdownState(date = new Date()) {
+  const pacificNow = getPacificDateTimeParts(date);
+  const secondsSinceMidnight = pacificNow.hour * 3600 + pacificNow.minute * 60 + pacificNow.second;
+  const drawStartSeconds = DAILY_DRAW_HOUR * 3600 + DAILY_DRAW_MINUTE * 60;
+  const drawStartsAtMs = pacificLocalDateTimeToMs({
+    year: pacificNow.year,
+    month: pacificNow.month,
+    day: pacificNow.day,
+    hour: DAILY_DRAW_HOUR,
+    minute: DAILY_DRAW_MINUTE,
+    second: 0
+  });
+
+  return {
+    timeZoneLabel: getPacificTimeZoneLabel(date),
+    showCountdown:
+      secondsSinceMidnight >= DAILY_COUNTDOWN_START_SECONDS && secondsSinceMidnight < drawStartSeconds,
+    countdownSeconds:
+      secondsSinceMidnight >= DAILY_COUNTDOWN_START_SECONDS && secondsSinceMidnight < drawStartSeconds
+        ? Math.max(0, Math.floor((drawStartsAtMs - date.getTime()) / 1000))
+        : 0,
+    isPastDrawTime: secondsSinceMidnight >= drawStartSeconds
+  };
 }
 
 async function hasWinnerToday() {
@@ -546,8 +658,10 @@ async function closeWindowAndPickWinner(roundId) {
 
 app.get("/state", async (req, res) => {
   try {
+    const now = new Date();
     const remaining = Math.max(0, Math.floor((windowExpiresAt - Date.now()) / 1000));
     const todaySummary = await getTodayDrawSummary();
+    const countdownState = getDailyCountdownState(now);
     const recent = await db.all(
       `
         SELECT payout_id
@@ -563,7 +677,11 @@ app.get("/state", async (req, res) => {
       recent,
       hasWinnerToday: await hasWinnerToday(),
       totalPlayersToday: todaySummary.totalPlayers,
-      winnerPayoutId: todaySummary.winnerPayoutId
+      winnerPayoutId: todaySummary.winnerPayoutId,
+      timeZoneLabel: countdownState.timeZoneLabel,
+      showDailyCountdown: countdownState.showCountdown,
+      countdownToDrawSeconds: countdownState.countdownSeconds,
+      isPastDailyDrawTime: countdownState.isPastDrawTime
     });
   } catch (err) {
     console.error("State error:", err);
@@ -885,7 +1003,7 @@ cron.schedule(
       console.error("Chat cleanup error:", err);
     }
   },
-  { timezone: "America/Los_Angeles" }
+  { timezone: PACIFIC_TIME_ZONE }
 );
 
 cron.schedule(
@@ -901,7 +1019,7 @@ cron.schedule(
       console.error("Midnight reset error:", err);
     }
   },
-  { timezone: "America/Los_Angeles" }
+  { timezone: PACIFIC_TIME_ZONE }
 );
 
 app.listen(PORT, () => {
