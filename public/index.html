@@ -63,40 +63,34 @@
 
     .menu-toggle {
       display: none;
-      width: 46px;
-      height: 46px;
+      width: 44px;
+      height: 44px;
       margin-left: 10px;
       padding: 0;
-      border: 1px solid #d8d8d8;
-      border-radius: 16px;
-      background: #fff;
+      border: 0;
+      border-radius: 14px;
+      background: transparent;
       cursor: pointer;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
       transition:
-        border-color 180ms ease,
-        box-shadow 180ms ease,
         transform 180ms ease;
     }
 
     .menu-toggle:hover {
-      border-color: #bdbdbd;
-      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
       transform: translateY(-1px);
     }
 
     .menu-toggle.is-open {
-      border-color: #111;
-      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+      transform: translateY(-1px);
     }
 
     .menu-toggle-box {
       position: relative;
-      width: 25px;
-      height: 25px;
-      border: 3px solid #151111;
-      border-radius: 10px;
+      width: 28px;
+      height: 28px;
+      border: 2.5px solid #151111;
+      border-radius: 11px;
       box-sizing: border-box;
     }
 
@@ -104,22 +98,22 @@
       position: absolute;
       left: 50%;
       width: 14px;
-      height: 3px;
+      height: 2.5px;
       background: #151111;
       border-radius: 999px;
       transform: translateX(-50%);
     }
 
     .menu-toggle-line:nth-child(1) {
-      top: 5px;
+      top: 6px;
     }
 
     .menu-toggle-line:nth-child(2) {
-      top: 10px;
+      top: 11.5px;
     }
 
     .menu-toggle-line:nth-child(3) {
-      top: 15px;
+      top: 17px;
     }
 
     .mobile-menu-backdrop {
@@ -297,6 +291,10 @@
       font-size: 1.2em;
       font-weight: 400;
       margin: 1em 0 2em 0;
+    }
+
+    .hero-copy--mobile {
+      display: none;
     }
 
     #clock {
@@ -794,13 +792,16 @@
       }
 
       .nav {
-        position: static;
+        position: absolute;
+        top: 12px;
+        right: 12px;
         display: flex;
-        justify-content: space-between;
-        width: min(calc(100% - 24px), 360px);
-        margin: 0 auto;
-        padding-top: 14px;
-        gap: 12px;
+        justify-content: flex-end;
+        width: auto;
+        margin: 0;
+        padding-top: 0;
+        gap: 10px;
+        z-index: 17;
       }
 
       .nav-links {
@@ -809,7 +810,7 @@
 
       .nav .chat-toggle {
         gap: 8px;
-        padding: 8px 13px 8px 11px;
+        padding: 8px 12px 8px 10px;
         margin-right: 0;
         font-size: 0.72em;
         flex: 0 1 auto;
@@ -831,7 +832,7 @@
       }
 
       .mobile-menu {
-        top: 72px;
+        top: 62px;
         right: 12px;
         width: min(calc(100% - 24px), 240px);
       }
@@ -841,7 +842,7 @@
         font-size: clamp(2.9rem, 13vw, 4rem);
         line-height: 0.9;
         letter-spacing: -0.07em;
-        margin: 24px auto 0;
+        margin: 86px auto 0;
         padding: 0 18px;
       }
 
@@ -852,6 +853,14 @@
         font-size: 0.95em;
         line-height: 1.4;
         color: #2f2f2f;
+      }
+
+      .hero-copy--desktop {
+        display: none;
+      }
+
+      .hero-copy--mobile {
+        display: block;
       }
 
       #clock {
@@ -1123,8 +1132,14 @@
 
   <h1>The $20 Dollar Game</h1>
   <h2>
-    Check in daily at 7 PM PT for your shot at $20.<br />
-    One 2-minute draw. One random winner. Real cash.
+    <span class="hero-copy--desktop">
+      Check in daily at 7 PM PT for your shot at $20.<br />
+      One 2-minute draw. One random winner. Real cash.
+    </span>
+    <span class="hero-copy--mobile">
+      Daily at 7 PM PT.<br />
+      2-minute draw. One winner.
+    </span>
   </h2>
 
   <div id="clock" class="hidden">01:00</div>
