@@ -1108,6 +1108,7 @@
       if (!mode || remainingSeconds <= 0) {
         clockMode = "hidden";
         clockTargetAt = 0;
+        clockEl.textContent = "";
         clockEl.classList.add("hidden");
         clockEl.classList.remove("clock--countdown");
         return;
@@ -1120,6 +1121,7 @@
 
     function renderClock() {
       if (clockMode === "hidden" || !clockTargetAt) {
+        clockEl.textContent = "";
         clockEl.classList.add("hidden");
         clockEl.classList.remove("clock--countdown");
         return;
@@ -1129,6 +1131,7 @@
       if (clockMode === "daily" && remainingSeconds <= 0) {
         clockMode = "hidden";
         clockTargetAt = 0;
+        clockEl.textContent = "";
         clockEl.classList.add("hidden");
         clockEl.classList.remove("clock--countdown");
         return;
@@ -1613,7 +1616,25 @@
     }
 
     function getPreDrawStatusMessage(state) {
-      return `Countdown to tonight's 7:00 PM ${getPacificLabel(state)} draw.`;
+      const remainingSeconds = Math.max(0, Number(state?.countdownToDrawSeconds || 0));
+
+      if (remainingSeconds <= 300) {
+        return "GET READY!";
+      }
+
+      if (remainingSeconds <= 7200) {
+        return `Tonight's 7 PM ${getPacificLabel(state)} draw should be opening shortly.`;
+      }
+
+      if (remainingSeconds > 36000) {
+        return "Stay tuned your chance for $20 is closer than you think!";
+      }
+
+      return `Countdown to tonight's 7 PM ${getPacificLabel(state)} draw.`;
+    }
+
+    function getMaintenanceStatusMessage() {
+      return "The game couldn't be played today due to maintenance. Come back tomorrow.";
     }
 
     async function updateUI() {
@@ -1672,7 +1693,7 @@
       }
 
       if (state.isPastDailyDrawTime) {
-        statusEl.textContent = `Tonight's 7 PM ${getPacificLabel(state)} draw should be opening shortly.`;
+        statusEl.textContent = getMaintenanceStatusMessage();
         return;
       }
 

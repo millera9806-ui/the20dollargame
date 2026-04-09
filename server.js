@@ -21,7 +21,7 @@ const DB_PATH = path.join(DB_DIR, "claims.db");
 const PACIFIC_TIME_ZONE = "America/Los_Angeles";
 const DAILY_DRAW_HOUR = 19;
 const DAILY_DRAW_MINUTE = 0;
-const DAILY_COUNTDOWN_START_SECONDS = 60;
+const DAILY_COUNTDOWN_START_SECONDS = 0;
 const DEFAULT_DRAW_WINDOW_SECONDS = 120;
 const CHAT_FETCH_LIMIT = 60;
 const CHAT_MAX_MESSAGE_LENGTH = 120;
@@ -562,7 +562,10 @@ function getDailyCountdownState(date = new Date()) {
       secondsSinceMidnight >= DAILY_COUNTDOWN_START_SECONDS && secondsSinceMidnight < drawStartSeconds
         ? Math.max(0, Math.floor((drawStartsAtMs - date.getTime()) / 1000))
         : 0,
-    isPastDrawTime: secondsSinceMidnight >= drawStartSeconds
+    isPastDrawTime: secondsSinceMidnight >= drawStartSeconds,
+    isWithinOpeningGrace:
+      secondsSinceMidnight >= drawStartSeconds &&
+      secondsSinceMidnight < drawStartSeconds + DEFAULT_DRAW_WINDOW_SECONDS
   };
 }
 
@@ -681,7 +684,8 @@ app.get("/state", async (req, res) => {
       timeZoneLabel: countdownState.timeZoneLabel,
       showDailyCountdown: countdownState.showCountdown,
       countdownToDrawSeconds: countdownState.countdownSeconds,
-      isPastDailyDrawTime: countdownState.isPastDrawTime
+      isPastDailyDrawTime: countdownState.isPastDrawTime,
+      isWithinDailyDrawGrace: countdownState.isWithinOpeningGrace
     });
   } catch (err) {
     console.error("State error:", err);
