@@ -49,11 +49,131 @@
       align-items: center;
     }
 
-    .nav a {
+    .nav-links {
+      display: flex;
+      align-items: center;
+    }
+
+    .nav-links a {
       color: black;
       text-decoration: none;
       margin-left: 20px;
       font-weight: bold;
+    }
+
+    .menu-toggle {
+      display: none;
+      width: 46px;
+      height: 46px;
+      margin-left: 10px;
+      padding: 0;
+      border: 1px solid #d8d8d8;
+      border-radius: 16px;
+      background: #fff;
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+      transition:
+        border-color 180ms ease,
+        box-shadow 180ms ease,
+        transform 180ms ease;
+    }
+
+    .menu-toggle:hover {
+      border-color: #bdbdbd;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+      transform: translateY(-1px);
+    }
+
+    .menu-toggle.is-open {
+      border-color: #111;
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+    }
+
+    .menu-toggle-box {
+      position: relative;
+      width: 25px;
+      height: 25px;
+      border: 3px solid #151111;
+      border-radius: 10px;
+      box-sizing: border-box;
+    }
+
+    .menu-toggle-line {
+      position: absolute;
+      left: 50%;
+      width: 14px;
+      height: 3px;
+      background: #151111;
+      border-radius: 999px;
+      transform: translateX(-50%);
+    }
+
+    .menu-toggle-line:nth-child(1) {
+      top: 5px;
+    }
+
+    .menu-toggle-line:nth-child(2) {
+      top: 10px;
+    }
+
+    .menu-toggle-line:nth-child(3) {
+      top: 15px;
+    }
+
+    .mobile-menu-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.04);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease;
+      z-index: 15;
+    }
+
+    .mobile-menu {
+      position: fixed;
+      top: 72px;
+      right: 24px;
+      width: 220px;
+      padding: 10px;
+      background: #fff;
+      border: 1px solid #e6e6e6;
+      border-radius: 20px;
+      box-shadow: 0 22px 40px rgba(0, 0, 0, 0.08);
+      opacity: 0;
+      transform: translateY(-8px);
+      pointer-events: none;
+      transition:
+        opacity 180ms ease,
+        transform 180ms ease;
+      z-index: 16;
+    }
+
+    .mobile-menu a {
+      display: block;
+      padding: 12px 14px;
+      color: #111;
+      text-decoration: none;
+      font-size: 0.95em;
+      font-weight: 700;
+      border-radius: 14px;
+    }
+
+    .mobile-menu a:hover {
+      background: #f7f7f7;
+    }
+
+    body.mobile-menu-open .mobile-menu-backdrop {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    body.mobile-menu-open .mobile-menu {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
     }
 
     .nav .chat-toggle {
@@ -666,20 +786,25 @@
     @media (max-width: 640px) {
       body {
         min-height: 100svh;
-        padding-bottom: 56px;
+        padding-bottom: 24px;
+      }
+
+      body.mobile-menu-open {
+        overflow: hidden;
       }
 
       .nav {
         position: static;
         display: flex;
-        justify-content: center;
-        gap: 18px;
+        justify-content: space-between;
+        width: min(calc(100% - 24px), 360px);
+        margin: 0 auto;
         padding-top: 14px;
+        gap: 12px;
       }
 
-      .nav a {
-        margin-left: 0;
-        font-size: 0.95em;
+      .nav-links {
+        display: none;
       }
 
       .nav .chat-toggle {
@@ -687,6 +812,7 @@
         padding: 8px 13px 8px 11px;
         margin-right: 0;
         font-size: 0.72em;
+        flex: 0 1 auto;
       }
 
       .nav .chat-toggle-dot {
@@ -694,43 +820,66 @@
         height: 10px;
       }
 
+      .menu-toggle {
+        display: inline-flex;
+        flex: none;
+        margin-left: 0;
+      }
+
+      .mobile-menu-backdrop {
+        display: block;
+      }
+
+      .mobile-menu {
+        top: 72px;
+        right: 12px;
+        width: min(calc(100% - 24px), 240px);
+      }
+
       h1 {
-        font-size: clamp(3.2rem, 14vw, 4.5rem);
-        line-height: 0.92;
-        letter-spacing: -0.06em;
-        margin-top: 34px;
-        padding: 0 16px;
+        max-width: 320px;
+        font-size: clamp(2.9rem, 13vw, 4rem);
+        line-height: 0.9;
+        letter-spacing: -0.07em;
+        margin: 24px auto 0;
+        padding: 0 18px;
       }
 
       h2 {
-        max-width: 320px;
-        margin: 0.85em auto 1.5em;
-        padding: 0 18px;
-        font-size: 0.98em;
-        line-height: 1.5;
+        max-width: 308px;
+        margin: 0.9em auto 0;
+        padding: 0 20px;
+        font-size: 0.95em;
+        line-height: 1.4;
+        color: #2f2f2f;
       }
 
       #clock {
-        font-size: clamp(4.2rem, 22vw, 6.2rem);
-        margin-top: 20px;
+        font-size: clamp(4.2rem, 22vw, 5.8rem);
+        margin-top: 22px;
         line-height: 0.92;
         letter-spacing: -0.04em;
       }
 
       #clock.clock--countdown {
-        font-size: clamp(3rem, 15vw, 4.6rem);
+        font-size: clamp(3.5rem, 17vw, 5rem);
         letter-spacing: -0.05em;
       }
 
       #status {
-        max-width: 340px;
+        max-width: 328px;
         margin-top: 14px;
-        padding: 0 18px;
-        font-size: 1.02em;
+        padding: 15px 18px;
+        font-size: 0.98em;
+        line-height: 1.5;
+        border: 1px solid #ececec;
+        border-radius: 22px;
+        background: #fafafa;
       }
 
       #claim-form {
         padding: 0 16px;
+        margin-top: 14px;
       }
 
       select,
@@ -738,7 +887,7 @@
       button {
         display: block;
         width: min(100%, 320px);
-        margin: 8px auto;
+        margin: 10px auto;
       }
 
       .g-recaptcha {
@@ -747,28 +896,47 @@
       }
 
       .sponsor-card {
-        max-width: 340px;
-        margin-top: 18px;
-        padding: 14px 14px;
-        border-radius: 14px;
+        max-width: 328px;
+        margin-top: 14px;
+        padding: 12px 12px 13px;
+        border-radius: 20px;
+        background: #fff;
       }
 
       .sponsor-logo-frame {
-        width: min(100%, 250px);
-        min-height: 78px;
+        width: min(100%, 220px);
+        min-height: 62px;
+        margin-top: 10px;
+        padding: 10px 12px;
+      }
+
+      .sponsor-kicker {
+        font-size: 0.64em;
+        letter-spacing: 0.22em;
+      }
+
+      .sponsor-headline {
+        margin-top: 7px;
+        font-size: 0.86em;
       }
 
       .logo-placeholder-main {
-        font-size: 1.3em;
+        font-size: 1.08em;
+        letter-spacing: 0.22em;
+      }
+
+      .logo-placeholder-sub {
+        margin-top: 5px;
+        font-size: 0.62em;
+        letter-spacing: 0.24em;
       }
 
       #winner-ticker {
-        font-size: 0.82em;
-        padding: 0.45em;
+        display: none;
       }
 
       footer {
-        padding: 0 18px;
+        display: none;
       }
 
       .chat-panel {
@@ -796,33 +964,31 @@
       }
 
       body.mobile-live h1 {
-        font-size: 1.95em;
-        margin-top: 20px;
-      }
-
-      body.mobile-entered h1 {
         display: none;
       }
 
       body.mobile-live h2,
+      body.mobile-entered h1,
       body.mobile-entered h2 {
         display: none;
       }
 
       body.mobile-live #clock,
       body.mobile-entered #clock {
-        margin-top: 34px;
-        font-size: clamp(4.8rem, 25vw, 6.9rem);
+        margin-top: 28px;
+        font-size: clamp(4.8rem, 25vw, 6.4rem);
       }
 
       body.mobile-live #status,
       body.mobile-entered #status {
-        max-width: 300px;
-        font-size: 1em;
+        max-width: 312px;
+        font-size: 0.96em;
       }
 
       body.mobile-live .sponsor-card {
-        display: none;
+        max-width: 312px;
+        margin-top: 12px;
+        padding: 10px 12px 11px;
       }
 
       body.mobile-live .chat-panel {
@@ -831,54 +997,49 @@
         pointer-events: none;
       }
 
-      body.mobile-entered #winner-ticker,
-      body.mobile-entered footer {
-        display: none;
-      }
-
       body.mobile-entered .sponsor-card {
         position: fixed;
-        top: 70px;
+        top: 72px;
         left: 50%;
         width: min(calc(100% - 28px), 320px);
         margin: 0;
-        padding: 10px 12px 12px;
+        padding: 9px 12px 10px;
         transform: translateX(-50%) scale(0.94);
-        opacity: 0.94;
+        opacity: 0.97;
         z-index: 12;
-        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.05);
       }
 
       body.mobile-entered .sponsor-kicker {
-        font-size: 0.68em;
+        font-size: 0.62em;
       }
 
       body.mobile-entered .sponsor-logo-frame {
-        width: min(100%, 182px);
-        min-height: 60px;
-        margin-top: 10px;
-        padding: 12px 10px;
+        width: min(100%, 172px);
+        min-height: 54px;
+        margin-top: 8px;
+        padding: 10px 10px;
       }
 
       body.mobile-entered .logo-placeholder-main {
-        font-size: 1.02em;
-        letter-spacing: 0.2em;
+        font-size: 0.96em;
+        letter-spacing: 0.18em;
       }
 
       body.mobile-entered .logo-placeholder-sub {
-        margin-top: 5px;
-        font-size: 0.66em;
-        letter-spacing: 0.28em;
+        margin-top: 4px;
+        font-size: 0.58em;
+        letter-spacing: 0.24em;
       }
 
       body.mobile-entered #clock {
-        margin-top: 192px;
+        margin-top: 176px;
       }
 
       body.mobile-entered.sponsor-spotlight-active .sponsor-card {
         top: 18px;
         width: min(calc(100% - 24px), 350px);
-        padding: 14px 14px 16px;
+        padding: 13px 14px 15px;
         transform: translateX(-50%) scale(1.03);
         opacity: 1;
         box-shadow: 0 16px 38px rgba(0, 0, 0, 0.09);
@@ -890,7 +1051,7 @@
       }
 
       body.mobile-entered.sponsor-spotlight-active #clock {
-        margin-top: 230px;
+        margin-top: 214px;
       }
 
       body.mobile-result {
@@ -907,11 +1068,11 @@
       }
 
       body.mobile-result #status {
-        max-width: 340px;
-        margin: 22svh auto 0;
-        font-size: 1.16em;
-        line-height: 1.72;
-        padding: 0 22px;
+        max-width: 328px;
+        margin: 18svh auto 0;
+        font-size: 1.06em;
+        line-height: 1.66;
+        padding: 18px 20px;
       }
     }
   </style>
@@ -932,9 +1093,33 @@
       <span class="chat-toggle-dot" aria-hidden="true"></span>
       <span class="chat-toggle-label">Live Chat</span>
     </button>
+    <div class="nav-links">
+      <a href="faq.html">FAQ</a>
+      <a href="contact.html">Contact</a>
+    </div>
+    <button
+      id="menu-toggle"
+      class="menu-toggle"
+      type="button"
+      aria-controls="mobile-menu"
+      aria-expanded="false"
+      aria-label="Open site menu"
+    >
+      <span class="menu-toggle-box" aria-hidden="true">
+        <span class="menu-toggle-line"></span>
+        <span class="menu-toggle-line"></span>
+        <span class="menu-toggle-line"></span>
+      </span>
+    </button>
+  </div>
+
+  <div id="mobile-menu-backdrop" class="mobile-menu-backdrop" aria-hidden="true"></div>
+  <aside id="mobile-menu" class="mobile-menu" aria-hidden="true">
     <a href="faq.html">FAQ</a>
     <a href="contact.html">Contact</a>
-  </div>
+    <a href="privacy.html">Privacy Policy</a>
+    <a href="rules.html">Official Rules</a>
+  </aside>
 
   <h1>The $20 Dollar Game</h1>
   <h2>
@@ -1020,6 +1205,10 @@
     const sponsorHeadlineEl = document.getElementById("sponsor-headline");
     const confettiLayerEl = document.getElementById("confetti-layer");
     const chatToggleEl = document.getElementById("chat-toggle");
+    const menuToggleEl = document.getElementById("menu-toggle");
+    const mobileMenuEl = document.getElementById("mobile-menu");
+    const mobileMenuBackdropEl = document.getElementById("mobile-menu-backdrop");
+    const mobileMenuLinkEls = Array.from(document.querySelectorAll("#mobile-menu a"));
     const chatPanelEl = document.getElementById("chat-panel");
     const chatCloseEl = document.getElementById("chat-close");
     const chatStatusEl = document.getElementById("chat-status");
@@ -1068,6 +1257,7 @@
     let clockMode = "hidden";
     let clockTargetAt = 0;
     let chatOpen = false;
+    let mobileMenuOpen = false;
     let chatLastMessageId = 0;
     let chatPollTimer = null;
     let chatIsLoading = false;
@@ -1158,6 +1348,25 @@
       chatToggleEl.classList.toggle("is-open", chatOpen);
       chatToggleEl.setAttribute("aria-expanded", chatOpen ? "true" : "false");
       chatToggleEl.setAttribute("aria-label", chatOpen ? "Close live chat" : "Open live chat");
+    }
+
+    function refreshMobileMenu() {
+      document.body.classList.toggle("mobile-menu-open", mobileMenuOpen);
+      menuToggleEl.classList.toggle("is-open", mobileMenuOpen);
+      menuToggleEl.setAttribute("aria-expanded", mobileMenuOpen ? "true" : "false");
+      menuToggleEl.setAttribute("aria-label", mobileMenuOpen ? "Close site menu" : "Open site menu");
+      mobileMenuEl.setAttribute("aria-hidden", mobileMenuOpen ? "false" : "true");
+      mobileMenuBackdropEl.setAttribute("aria-hidden", mobileMenuOpen ? "false" : "true");
+    }
+
+    function closeMobileMenu() {
+      mobileMenuOpen = false;
+      refreshMobileMenu();
+    }
+
+    function openMobileMenu() {
+      mobileMenuOpen = true;
+      refreshMobileMenu();
     }
 
     function clearChatAttention() {
@@ -1335,6 +1544,7 @@
         return;
       }
 
+      closeMobileMenu();
       clearChatAttention();
       chatOpen = true;
       chatPanelEl.classList.add("is-open");
@@ -1762,6 +1972,26 @@
     });
 
     refreshChatToggle();
+    refreshMobileMenu();
+
+    menuToggleEl.addEventListener("click", () => {
+      if (mobileMenuOpen) {
+        closeMobileMenu();
+        return;
+      }
+
+      openMobileMenu();
+    });
+
+    mobileMenuBackdropEl.addEventListener("click", () => {
+      closeMobileMenu();
+    });
+
+    mobileMenuLinkEls.forEach((linkEl) => {
+      linkEl.addEventListener("click", () => {
+        closeMobileMenu();
+      });
+    });
 
     chatToggleEl.addEventListener("click", () => {
       if (chatOpen) {
@@ -1794,12 +2024,20 @@
     });
 
     window.addEventListener("resize", () => {
+      if (!isMobileViewport()) {
+        closeMobileMenu();
+      }
+
       if (latestStateSnapshot) {
         updateChatAvailability(latestStateSnapshot);
       }
     });
 
     window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && mobileMenuOpen) {
+        closeMobileMenu();
+      }
+
       if (event.key === "Escape" && chatOpen) {
         closeChat();
       }
